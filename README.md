@@ -6,11 +6,13 @@ jazz ensemble. The product is a static web page that plays a recorded set and,
 in sync with the music, shows each fly's brain activity on its real neuron
 anatomy next to a 3D animated fly playing its instrument.
 
-Status: **phase 2**. A studio take runs the sax fly through a tune: the
+Status: **phase 3**. A studio take runs the sax fly through a tune: the
 courtship song circuit is driven along the melody, wing motor neuron activity
 becomes notes, audio is rendered, and the stage page plays it back with the
 audio as the clock, brain activity on soma points and hero meshes, the chart,
-the form and the motor readouts. One fly, no bodies yet.
+the form, the motor readouts, and a procedural fly on a riser whose wing,
+legs, body and proboscis are posed every frame from those same readouts. One
+fly so far.
 See [`docs/plan.md`](docs/plan.md) for the plan and
 [`docs/reference.md`](docs/reference.md) for the data facts it relies on.
 
@@ -56,7 +58,7 @@ src/fruitless/
   render/      deterministic additive synth, WAV, ffmpeg encode
   cli.py
 tunes/         one directory per tune: tune.yaml plus a melody file
-stage/         the web page: Vite + TypeScript + three.js
+stage/         the web page: Vite + TypeScript + three.js (src/body: fly, rig, instruments)
 data/sources.lock.json   what bytes the tables are; copied into every take
 docs/                    plan, reference, log
 tests/

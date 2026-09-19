@@ -8,7 +8,7 @@
   <body>
     <header>
       <div>
-        <h1>Fruitless Sessions <span class="phase">stage · phase 2</span></h1>
+        <h1>Fruitless Sessions <span class="phase">stage · phase 3</span></h1>
         <div id="title" class="sub"></div>
       </div>
       <div id="meta" class="meta"></div>
@@ -17,6 +17,7 @@
       <canvas id="stage"></canvas>
       <aside id="readout" class="readout"></aside>
       <aside id="motor" class="motor"></aside>
+      <aside id="rig" class="rig"></aside>
       <div id="status" class="status"></div>
       <div id="now" class="now"></div>
     </main>
@@ -26,6 +27,7 @@
     <p class="note">
       A leaky integrate-and-fire model of the MaleCNS v1.0 wiring (Shiu et al. 2024 constants), not a fly.
       Dots are neurons at their soma positions; a dot glows when the model neuron spiked in that time bin.
+      The body is posed every frame from the same motor readouts that made the notes; nothing is keyframed.
       MaleCNS is CC BY 4.0, FlyEM at HHMI Janelia and collaborators.
     </p>
     <script type="module" src="/src/main.ts"></script>
