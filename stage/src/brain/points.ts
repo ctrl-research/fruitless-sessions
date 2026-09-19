@@ -48,7 +48,7 @@ export class BrainPoints {
     for (let i = 0; i < this.n; i++) {
       const name = superclass[i] === 255 ? '' : legend[superclass[i]]
       const hue = SUPERCLASS_HUE[name] ?? 0.0
-      c.setHSL(hue, 0.45, 0.07)
+      c.setHSL(hue, 0.5, 0.032)   // resting dots are dim; overlap in the optic lobes still adds up, but far less
       this.base[3 * i] = c.r; this.base[3 * i + 1] = c.g; this.base[3 * i + 2] = c.b
     }
     this.color = new Float32Array(this.base)
@@ -62,7 +62,7 @@ export class BrainPoints {
     geom.boundingSphere = new THREE.Sphere(this.center.clone(), this.radius)
 
     const mat = new THREE.PointsMaterial({
-      size: 0.45, vertexColors: true, sizeAttenuation: true, transparent: true, opacity: 0.85,
+      size: 0.34, vertexColors: true, sizeAttenuation: true, transparent: true, opacity: 0.85,   // smaller dots: less additive pile-up at rest
       depthWrite: false, blending: THREE.AdditiveBlending,
     })
     this.object = new THREE.Points(geom, mat)

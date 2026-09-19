@@ -298,6 +298,17 @@ async function main() {
   const nowEl = document.getElementById('now')!
   if (!score) strip.style.display = 'none'
   else strip.style.height = `${16 + 22 * Math.max(1, Object.keys(notesByRole).length)}px`
+  // drag along the strip to scrub; a click seeks, playback state is kept
+  let scrubbing = false
+  const seekFromPointer = (e: PointerEvent) => {
+    const r = strip.getBoundingClientRect()
+    transport.seek(Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * duration)
+  }
+  strip.style.cursor = 'ew-resize'
+  strip.addEventListener('pointerdown', e => { scrubbing = true; strip.setPointerCapture(e.pointerId); seekFromPointer(e) })
+  strip.addEventListener('pointermove', e => { if (scrubbing) seekFromPointer(e) })
+  strip.addEventListener('pointerup', e => { scrubbing = false; strip.releasePointerCapture(e.pointerId) })
+  strip.addEventListener('pointercancel', () => { scrubbing = false })
   showPanels(performers[focus])
 
   transport.addSeekListener(() => {
