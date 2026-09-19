@@ -1,49 +1,64 @@
-# template
+# Fruitless Sessions
 
-Template repository for `ctrl-research` projects.
+Simulated fruit fly nervous systems, built from the Janelia FlyEM
+[male CNS v1.0](https://male-cns.janelia.org/) connectome, playing together as a
+jazz ensemble. The product is a static web page that plays a recorded set and,
+in sync with the music, shows each fly's brain activity on its real neuron
+anatomy next to a 3D animated fly playing its instrument.
 
-## What's Included
+Status: **phase 0**. Data pipeline, connectome pack, a stateful simulation
+session and the activity bundle format exist. No music, no page, no bodies yet.
+See [`docs/plan.md`](docs/plan.md) for the plan and
+[`docs/reference.md`](docs/reference.md) for the data facts it relies on.
 
-- **Renovate** — automated dependency updates for Docker, Go modules, and GitHub Actions
-- **Branch protection** — `main` requires PRs and review
-- **CODEOWNERS** — `@ctrl-research/reviewers` auto-requested for review
-- **MIT License**
-- **.gitignore** — common exclusions for OS, IDE, build outputs, and secrets
-- **.tool-versions** — single source of truth for language/tool versions (asdf/mise compatible)
+## What this is, honestly
 
-## Using This Template
+Every fly is the Shiu et al. 2024 leaky integrate-and-fire model run on the
+166,700 neurons and 24.5 million signed connections of the MaleCNS release,
+through Kisame76's [MLX engine](https://github.com/Kisame76/mlx-lif-engine).
+The connectome gives wiring, synapse counts and predicted transmitter. It does
+not give synaptic weights, time constants, neuromodulation or plasticity. One
+global weight per synapse, fitted to the FlyWire female brain, is reused here
+unchanged. Rhythm and harmony come from a conductor and from small, documented
+readout functions, not from the neurons. It is a model of the wiring, not a fly.
 
-1. Click **Use this template** to create a new repository
-2. Pin your project's language and tool versions in `.tool-versions`
-3. Update `renovate.json` to configure managers and schedules for your project
-4. Enable the new repo in the Renovate GitHub App if using hosted Renovate
+## Setup
 
-## Renovate
+Apple silicon only (the engine is Metal). Tool versions are pinned in
+`.tool-versions`; install them with `mise install`.
 
-Dependency updates are managed via Renovate. Configuration is in `renovate.json` and `.github/renovate-config.js`.
+```bash
+uv sync --extra dev
+uv run fruitless fetch-data      # ~1.1 GB, three Feather tables, SHA-256 checked
+uv run fruitless pack            # ~90 s, writes data/pack/male_cns_v1 (189 MiB)
+uv run pytest                    # unit tests plus one GPU parity test
+uv run fruitless smoke           # sweet taste drives MN9 for 1 s; writes takes/smoke/
+```
 
-Enabled managers:
-- `asdf` (keeps `.tool-versions` up to date)
-- `docker-compose`
-- `github-actions`
-- `gomod`
+`fruitless select 'JO-A.*' 'JO-B.*'` lists the neurons a type regex selects.
 
-Add or remove managers as needed for your project.
-
-## Files
+## Layout
 
 ```
-.
-├── .github/
-│   ├── CODEOWNERS           # Auto-request review from @ctrl-research/reviewers
-│   ├── renovate-config.js   # Renovate platform config
-│   └── workflows/
-│       └── renovate.yaml    # Renovate GitHub Action workflow
-├── .gitignore
-├── .tool-versions          # Pinned language/tool versions (asdf/mise)
-├── CONTRIBUTING.md
-├── LICENSE
-├── README.md
-├── renovate.json           # Renovate settings
-└── SECURITY.md
+src/fruitless/
+  data/        release tables: lock file, fetch, annotations
+  flies/       neuron selection by MaleCNS annotation; shared circuits
+  sim/         Session: the engine's kernels, advanced one grid step at a time
+  recording/   binned activity in the bundle format the stage reads
+  cli.py
+data/sources.lock.json   what bytes the tables are; copied into every take
+docs/                    plan, reference, log
+tests/
 ```
+
+## Data and credit
+
+MaleCNS v1.0 is CC BY 4.0: FlyEM at HHMI Janelia, the University of Cambridge,
+the MRC Laboratory of Molecular Biology, Google Research and the MaleCNS
+collaboration. Berg, Beckett, Costa, Schlegel et al., *Sexual dimorphism in the
+complete Drosophila male central nervous system connectome*, Cell 2026.
+Nothing from the release is redistributed in this repository.
+
+The simulation engine is Kisame76's `mlx-lif-engine` (MIT). The model is Shiu
+et al., *A Drosophila computational brain model reveals sensorimotor
+processing*, Nature 2024.

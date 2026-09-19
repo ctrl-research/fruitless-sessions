@@ -63,3 +63,12 @@ venv/
 *.tmp
 *.temp
 .cache/
+
+# Fruitless Sessions
+data/raw/
+data/pack/
+takes/
+stage/public/takes/
+stage/assets/
+.ruff_cache/
+.pytest_cache/

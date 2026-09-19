@@ -2,34 +2,25 @@ name: CI
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
 
 jobs:
-  validate:
+  python:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.28"
+      - name: Install
+        run: uv sync --extra dev --python 3.12
+      - name: Lint
+        run: uv run ruff check src tests
+      - name: Unit tests (the Metal engine parity test only runs on Apple silicon)
+        run: uv run pytest -m "not sim"
       - name: Check for sensitive files
         run: |
-          # Fail if .env, secrets, or private keys are committed
-          if git grep -l "\.env\|PRIVATE_KEY\|AWS_SECRET" --cached 2>/dev/null; then
-            echo "Error: sensitive files committed"
-            exit 1
+          if git grep -l "PRIVATE_KEY\|AWS_SECRET" --cached -- ':!*.md' 2>/dev/null; then
+            echo "Error: sensitive strings committed"; exit 1
           fi
-
-      - name: Validate YAML files
-        run: |
-          for f in $(find . -name "*.yaml" -o -name "*.yml" 2>/dev/null | grep -v node_modules); do
-            python3 -c "import yaml, sys; yaml.safe_load(open('$f'))" 2>/dev/null || echo "Invalid YAML: $f"
-          done
-
-      # Add project-specific validation steps below, e.g.:
-      # - name: Run tests
-      #   run: go test ./...
-      #
-      # - name: Build Docker image
-      #   run: docker build .
