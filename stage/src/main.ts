@@ -106,9 +106,11 @@ async function main() {
   const bassSeat = seats.get('bass')
   if (seats.has('sax') && bassSeat) {
     const outward = Math.sign(bassSeat.x) || 1
-    seats.set('sax', new THREE.Vector3(bassSeat.x + outward * formationR * 0.75, 0, bassSeat.z))
+    seats.set('sax', new THREE.Vector3(bassSeat.x + outward * formationR * 0.75, 0, bassSeat.z + formationR * 0.45))   // and a step forward
   }
-  const platformR = formationR + bodyScale * 1.2   // keeps the disc about the size it was before the seats spread
+  // the disc reaches just past the furthest seat, so a performer stepped forward still stands on it
+  const reach = Math.max(formationR, ...[...seats.values()].map(v => Math.hypot(v.x, v.z)))
+  const platformR = reach + bodyScale * 1.6
   const platform = new THREE.Mesh(
     new THREE.CylinderGeometry(platformR, platformR * 1.04, bodyScale * 0.35, 64),
     new THREE.MeshStandardMaterial({ color: 0x1a1a24, roughness: 0.85, metalness: 0.1 }),
@@ -227,7 +229,7 @@ async function main() {
     // back off until the bandstand's half-width fits the horizontal half-angle of the lens,
     // with margin; re-framed on every resize until the user takes the camera
     // fit both the band's width and the platform-to-brain height, whichever needs more distance
-    const halfWidth = (Math.max(formationR, R * 1.45) + R * 1.0) * 1.1
+    const halfWidth = (Math.max(reach, R * 1.45) + R * 1.0) * 1.1
     const halfHeight = R * 1.15 * 1.1          // platform at -0.35R, brain tops near +1.9R, centred on the look-at
     const tanV = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))
     camDist = Math.max(halfWidth / (tanV * camera.aspect), halfHeight / tanV) * 1.15 + formationR * 0.6   // the front pair stands forward of the centre
