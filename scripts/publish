@@ -21,6 +21,9 @@ git -C "$ROOT" worktree add --detach "$TMP" >/dev/null 2>&1
   git rm -rfq . >/dev/null 2>&1 || true
   cp -R "$ROOT/stage/dist/." .
   touch .nojekyll
+  # a push-triggered workflow only runs if it exists on the pushed branch
+  mkdir -p .github/workflows
+  cp "$ROOT/.github/workflows/pages.yml" .github/workflows/pages.yml
   git add -A
   git -c user.name="fruitless publish" -c user.email="noreply@ctrl-research" commit -qm "publish $(date -u +%Y-%m-%dT%H:%MZ) from $(git -C "$ROOT" rev-parse --short HEAD)"
   git push -f origin gh-pages
