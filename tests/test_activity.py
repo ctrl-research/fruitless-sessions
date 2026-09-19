@@ -40,3 +40,12 @@ def test_writer_chunks_and_partial_tail(tmp_path):
     assert c0.dense()[0, 2] == 1 and c0.dense()[4, 3] == 1
     assert c1.dense()[0, 1] == 1
     assert TICKS_PER_MS == 10
+
+
+def test_fsm_round_trip(tmp_path):
+    from fruitless.recording.meshes import read_fsm, write_fsm
+    v = np.array([[0, 0, 0], [1000, 0, 0], [0, 2000, 500]], dtype=np.float32)
+    f = np.array([[0, 1, 2]], dtype=np.uint32)
+    write_fsm(tmp_path / "m.fsm", v, f)
+    v2, f2 = read_fsm(tmp_path / "m.fsm")
+    assert np.allclose(v, v2, atol=0.05) and np.array_equal(f, f2)   # 16-bit inside the bbox

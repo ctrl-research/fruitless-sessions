@@ -124,9 +124,67 @@ def cmd_smoke(args) -> int:
         "hero_layer": hmeta,
         "pack_dataset": pack.manifest.get("dataset"),
         "seed": args.seed,
+        "circuit": {"sweet_grn": sweet.tolist(), "MN9_L": mn9["MN9_L"].tolist(),
+                    "MN9_R": mn9["MN9_R"].tolist(), "DNp01": gf.tolist()},
     }
     (out / "smoke.json").write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))
+    return 0
+
+
+def cmd_bundle(args) -> int:
+    """Assemble a take bundle for the stage from a take directory (takes/<name>)."""
+    from lif import core
+
+    from fruitless.recording.bundle import default_stage_dir, flies_from_take_dir, write_bundle
+    pack = core.load_pack(args.pack, verify_hashes=False)
+    take = Path(args.take)
+    flies, extra, audio = flies_from_take_dir(take)
+    rep = json.loads((take / ("take.json" if (take / "take.json").is_file() else "smoke.json")).read_text())
+    out = Path(args.out) if args.out else default_stage_dir() / args.name
+    m = write_bundle(out, args.name, pack, flies, duration_s=rep.get("seconds_bio", 0.0),
+                     seed=rep.get("seed"), extra=extra, audio_src=(take / audio) if audio else None)
+    print(f"bundle: {out}  flies={[f['role'] for f in m['flies']]}  duration={m['duration_s']}s  "
+          f"audio={m['audio']}  soma={m['shared']['with_soma']}/{m['shared']['n_neurons']}")
+    return 0
+
+
+def cmd_take(args) -> int:
+    """Run a studio take of a tune: simulate, record, map to notes, render audio."""
+    from fruitless.conductor.take import run_take
+    out = Path(args.out) if args.out else paths.TAKES / Path(args.tune).parent.name
+    rep = run_take(Path(args.tune), out, seed=args.seed, pack_dir=args.pack,
+                   render_audio=not args.no_audio)
+    print(json.dumps({k: rep[k] for k in ("seed", "seconds_bio", "seconds_wall", "total_spikes", "audio")}, indent=2))
+    for f in rep["flies"]:
+        print(f"  {f['role']}: {f['n_notes']} notes")
+    print(f"take: {out}")
+    return 0
+
+
+def cmd_meshes(args) -> int:
+    """Fetch hero meshes for a bundle: every neuron in its flies' circuit groups."""
+    from lif import core
+
+    from fruitless.recording.meshes import fetch_meshes
+    pack = core.load_pack(args.pack, verify_hashes=False)
+    bundle = Path(args.bundle)
+    manifest = json.loads((bundle / "take.json").read_text())
+    idx = sorted({i for f in manifest["flies"]
+                  for g, members in f["circuit"].items()
+                  if not f.get("mesh_groups") or g in f["mesh_groups"]
+                  for i in members})
+    if args.indices:
+        idx = sorted(set(idx) | set(args.indices))
+    print(f"{len(idx)} hero neurons -> {bundle / 'meshes'} (lod {args.lod})", file=sys.stderr)
+    doc = fetch_meshes(bundle, pack.neuron_ids, np.array(idx, dtype=np.int64), lod=args.lod,
+                       overwrite=args.overwrite)
+    manifest["meshes"] = {"index": "meshes/index.json", "lod": args.lod,
+                          "n": len(doc["neurons"]),
+                          "vertices": sum(m["vertices"] for m in doc["neurons"].values()),
+                          "bytes": sum(m.get("bytes", 0) for m in doc["neurons"].values())}
+    (bundle / "take.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    print(json.dumps(manifest["meshes"]))
     return 0
 
 
@@ -156,7 +214,33 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--chunk-s", type=float, default=10.0)
     p.set_defaults(fn=cmd_smoke)
 
+    p = sub.add_parser("bundle", help="assemble a take bundle for the stage from a take directory")
+    p.add_argument("take", type=Path, help="e.g. takes/smoke")
+    p.add_argument("--name", default=None)
+    p.add_argument("--role", default="smoke")
+    p.add_argument("--pack", type=Path, default=paths.PACK)
+    p.add_argument("--out", type=Path, default=None, help="default stage/public/takes/<name>")
+    p.set_defaults(fn=cmd_bundle)
+
+    p = sub.add_parser("take", help="run a studio take of a tune (simulate, record, notes, audio)")
+    p.add_argument("tune", type=Path, help="e.g. tunes/blues-in-f/tune.yaml")
+    p.add_argument("--out", type=Path, default=None, help="default takes/<tune dir name>")
+    p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--pack", type=Path, default=paths.PACK)
+    p.add_argument("--no-audio", action="store_true")
+    p.set_defaults(fn=cmd_take)
+
+    p = sub.add_parser("meshes", help="fetch hero neuron meshes into a bundle (needs --extra meshes)")
+    p.add_argument("bundle", type=Path, help="e.g. stage/public/takes/smoke")
+    p.add_argument("--pack", type=Path, default=paths.PACK)
+    p.add_argument("--lod", type=int, default=3, help="3 is coarsest (~28k vertices for a big MN)")
+    p.add_argument("--indices", type=int, nargs="*", default=None, help="extra pack indices")
+    p.add_argument("--overwrite", action="store_true")
+    p.set_defaults(fn=cmd_meshes)
+
     args = ap.parse_args(argv)
+    if getattr(args, "cmd", None) == "bundle" and args.name is None:
+        args.name = Path(args.take).name
     return args.fn(args)
 
 

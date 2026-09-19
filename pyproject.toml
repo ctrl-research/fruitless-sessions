@@ -14,10 +14,17 @@ dependencies = [
   # Pinned to a commit; bump deliberately, since pack format and tick
   # semantics live there.
   "mlx-lif-engine @ git+https://github.com/Kisame76/mlx-lif-engine.git@02657cf6fa035b9254e00ff52013f54a34489e00",
+  # music: tune files, chord and melody theory, MIDI
+  "pyyaml>=6",
+  "music21>=9",
+  "mido>=1.3",
+  "pretty_midi>=0.2.10",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "ruff>=0.6"]
+# Fetching hero neuron meshes from the release's precomputed source.
+meshes = ["cloud-volume>=12"]
 
 [project.scripts]
 fruitless = "fruitless.cli:main"
