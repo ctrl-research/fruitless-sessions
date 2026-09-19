@@ -9,7 +9,7 @@ import { AudioClock } from './clock'
 import { Score, type TuneInfo, type NoteEvent } from './score'
 import { FlyBody, idlePose } from './body/fly'
 import { rigFor } from './body/rig'
-import { drumKit, saxophone, upright } from './body/instruments'
+import { drumKit, piano, saxophone, upright } from './body/instruments'
 
 const params = new URLSearchParams(location.search)
 const takeName = params.get('take') ?? 'smoke'
@@ -90,17 +90,24 @@ async function main() {
   // rhythm section toward the back, soloists toward the front. Brains float above each fly.
   const n = flies.length
   const formationR = n === 1 ? 0 : R * (0.4 + 0.22 * n)
-  const backRole = (r: string) => r === 'drums' ? 0 : r === 'bass' ? 1 : 2      // drums at the back
-  const ordered = [...flies].sort((a, b) => backRole(a.entry.role) - backRole(b.entry.role))
+  // seats on the back half-circle, rhythm section first (drums back centre, then piano and
+  // bass alternating left and right), with the sides stepped toward the audience. The sax then
+  // takes the outer side of the bassist at the same depth.
   const seats = new Map<string, THREE.Vector3>()
+  const backRole = (r: string) => r === 'drums' ? 0 : r === 'piano' ? 1 : r === 'bass' ? 2 : 3
+  const ordered = [...flies].sort((a, b) => backRole(a.entry.role) - backRole(b.entry.role))
   ordered.forEach((f, i) => {
-    // spread around the back half-circle, back-centre first, then alternating left/right
     const k = i === 0 ? 0 : (i % 2 === 1 ? -1 : 1) * Math.ceil(i / 2)
-    const ang = Math.PI / 2 + k * (Math.PI / Math.max(2, n)) * 1.15 + (i % 2 ? 0.08 : -0.06)   // organic offsets
+    const ang = Math.PI / 2 + k * (Math.PI / Math.max(2, n)) * 1.15 + (i % 2 ? 0.08 : -0.06)
     const rr = formationR * (i === 0 ? 1.0 : 0.9 + 0.05 * (i % 2))
-    const forward = i === 0 ? 0 : formationR * 0.3          // the sides step toward the audience
+    const forward = i === 0 ? 0 : formationR * 0.3
     seats.set(f.entry.role, new THREE.Vector3(Math.cos(ang) * rr, 0, -Math.sin(ang) * rr + formationR * 0.3 + forward))
   })
+  const bassSeat = seats.get('bass')
+  if (seats.has('sax') && bassSeat) {
+    const outward = Math.sign(bassSeat.x) || 1
+    seats.set('sax', new THREE.Vector3(bassSeat.x + outward * formationR * 0.75, 0, bassSeat.z))
+  }
   const platformR = formationR + bodyScale * 1.2   // keeps the disc about the size it was before the seats spread
   const platform = new THREE.Mesh(
     new THREE.CylinderGeometry(platformR, platformR * 1.04, bodyScale * 0.35, 64),
@@ -152,7 +159,8 @@ async function main() {
     const stand = new THREE.Group()
     stand.position.set(0, -R * 0.35, 0)
     const performer = new THREE.Group()
-    // face the audience (+Z), turned a little toward the centre of the platform
+    // face the audience (+Z), turned a little toward the centre of the platform; the piano
+    // sits side-on like a real stage piano so the pianist is seen in profile at the keys
     performer.rotation.y = Math.atan2(-seat.x, Math.abs(seat.z) + formationR) * 0.6 + 0.35
     stand.add(performer)
     const body = new FlyBody(bodyScale)
@@ -164,6 +172,8 @@ async function main() {
       const b = upright(bodyScale); b.position.set(bodyScale * 0.6, 0, bodyScale * 0.4); performer.add(b)
     } else if (f.entry.role === 'drums') {
       const kit = drumKit(bodyScale); kit.group.position.set(0, 0, bodyScale * 0.9); performer.add(kit.group); kitHits = kit.hits
+    } else if (f.entry.role === 'piano') {
+      const pf = piano(bodyScale); pf.position.set(0, 0, bodyScale * 0.35); performer.add(pf)
     }
     group.add(stand)
     const heroIds = f.layers['hero'] ? await f.layers['hero'].subset : null
@@ -220,7 +230,7 @@ async function main() {
     const halfWidth = (Math.max(formationR, R * 1.45) + R * 1.0) * 1.1
     const halfHeight = R * 1.15 * 1.1          // platform at -0.35R, brain tops near +1.9R, centred on the look-at
     const tanV = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))
-    camDist = Math.max(halfWidth / (tanV * camera.aspect), halfHeight / tanV) * 1.15 + formationR * 0.3
+    camDist = Math.max(halfWidth / (tanV * camera.aspect), halfHeight / tanV) * 1.15 + formationR * 0.6   // the front pair stands forward of the centre
     if (!userMoved) {
       camera.position.set(controls.target.x, R * 0.95, camDist)
       camera.lookAt(controls.target)
@@ -272,6 +282,7 @@ async function main() {
   const strip = document.getElementById('score') as HTMLCanvasElement
   const nowEl = document.getElementById('now')!
   if (!score) strip.style.display = 'none'
+  else strip.style.height = `${16 + 22 * Math.max(1, Object.keys(notesByRole).length)}px`
   showPanels(performers[focus])
 
   transport.addSeekListener(() => {
@@ -283,7 +294,7 @@ async function main() {
   function soloistIndex(t: number): number {
     if (!score) return 0
     const sec = score.sectionAt(t)
-    const who = sec?.kind === 'head' ? 'sax' : sec?.who?.[0]
+    const who = sec?.kind === 'head' || sec?.kind === 'free' ? 'sax' : sec?.who?.[0]
     const i = performers.findIndex(pf => pf.entry.role === who)
     return i < 0 ? 0 : i
   }
@@ -364,7 +375,9 @@ async function main() {
       score.drawStrip(strip, tNow)
       const sec = score.sectionAt(tNow)
       const sounding = performers.flatMap(pf => pf.notes.filter(n => n.t <= tNow && tNow < n.t + n.dur).map(n => `${pf.entry.role[0]}:${noteName(n.midi)}`))
-      nowEl.textContent = `bar ${score.barAt(tNow) + 1} · ${score.chordAt(tNow) || '–'} · ${sec ? sec.kind + (sec.who.length ? ' ' + sec.who.join('/') : '') : ''}` +
+      const freeKeys = (take.manifest as unknown as { free_keys?: (string | null)[] }).free_keys
+      const chordLabel = score.chordAt(tNow) || (freeKeys ? (freeKeys[score.barAt(tNow)] ?? 'finding the key…') + ' (from the ring)' : '–')
+      nowEl.textContent = `bar ${score.barAt(tNow) + 1} · ${chordLabel} · ${sec ? sec.kind + (sec.who.length && sec.kind !== 'free' ? ' ' + sec.who.join('/') : '') : ''}` +
         (sounding.length ? ` · ♪ ${sounding.slice(0, 6).join(' ')}` : '')
     }
     // camera pans (not pivots) toward the soloist until the user takes over
