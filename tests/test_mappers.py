@@ -110,8 +110,9 @@ def test_key_from_bump_walks_the_circle_of_fifths():
 
 
 def test_drums_five_four_accents():
-    from pathlib import Path as _P
-    t = load_tune(_P(__file__).resolve().parents[1] / "tunes" / "take-five" / "tune.yaml")
+    from fruitless.conductor.tune import Section, Tune
+    t = Tune(name="five", tempo_bpm=176.0, grid="swing8", key="e-", chart=[["Ebm7", "", "", "Bbm7", ""]],
+             form=[Section("head", ("sax",), 1)], roles=["drums"], coupling={}, free_style=False, meter_beats=5)
     m = DrumsMapper(t)
     for step in range(t.steps_per_bar):
         m.on_step(step, _drums())

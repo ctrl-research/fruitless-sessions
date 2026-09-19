@@ -80,25 +80,25 @@ def render_note(n: Note, preset: Preset, rng: np.random.Generator) -> tuple[int,
 def render_drum(n: Note, rng: np.random.Generator) -> tuple[int, np.ndarray]:
     """GM drum voices from noise and a pitched thump; deterministic per note."""
     vel = (n.vel / 127.0) ** 1.3
-    if n.midi == 36:      # kick: pitched sine sweep 120 -> 45 Hz
+    if n.midi in (35, 36):      # kick: pitched sine sweep 120 -> 45 Hz
         t = np.arange(int(0.25 * SR)) / SR
         f = 45 + 75 * np.exp(-t * 30)
         sig = np.sin(2 * np.pi * np.cumsum(f) / SR) * np.exp(-t * 12)
-    elif n.midi == 38:    # snare: tone + noise burst
+    elif n.midi in (38, 40, 37):    # snare, electric snare, side stick: tone + noise burst
         t = np.arange(int(0.22 * SR)) / SR
         sig = (0.4 * np.sin(2 * np.pi * 190 * t) * np.exp(-t * 25)
                + 0.8 * rng.standard_normal(t.size) * np.exp(-t * 18))
-    elif n.midi == 42:    # closed hat: short bright noise
+    elif n.midi in (42, 44, 46):    # hats: short bright noise
         t = np.arange(int(0.07 * SR)) / SR
         noise = rng.standard_normal(t.size)
         sig = (noise - np.roll(noise, 1)) * np.exp(-t * 60) * 0.7
-    elif n.midi == 51:    # ride: long metallic noise with a ring
+    elif n.midi in (51, 59, 53):    # ride, ride 2, ride bell: long metallic noise with a ring
         t = np.arange(int(0.6 * SR)) / SR
         noise = rng.standard_normal(t.size)
         sig = ((noise - np.roll(noise, 1)) * 0.25 + 0.2 * np.sin(2 * np.pi * 3200 * t)) * np.exp(-t * 5)
-    elif n.midi in (45, 47):   # toms
+    elif n.midi in (41, 43, 45, 47, 48, 50, 60, 61, 62, 63, 64):   # toms and hand drums
         t = np.arange(int(0.3 * SR)) / SR
-        f0 = 110 if n.midi == 45 else 150
+        f0 = {41: 80, 43: 95, 45: 110, 47: 150, 48: 180, 50: 210, 60: 240, 61: 200, 62: 300, 63: 260, 64: 220}.get(n.midi, 130)
         f = f0 + 40 * np.exp(-t * 20)
         sig = np.sin(2 * np.pi * np.cumsum(f) / SR) * np.exp(-t * 9)
     else:                 # crash 49 and anything else

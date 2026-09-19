@@ -167,9 +167,12 @@ def run_take(tune_path: Path, out: Path, seed: int = 0, pack_dir: Path = paths.P
     out.mkdir(parents=True, exist_ok=True)
     pack = core.load_pack(pack_dir)
     r = Resolver(pack.neuron_ids)
-    step_ticks = round(tune.step_seconds * 1000) * TICKS_PER_MS
-    if abs(step_ticks / TICKS_PER_MS / 1000 - tune.step_seconds) > 1e-9:
-        print(f"note: step {tune.step_seconds}s rounded to {step_ticks} ticks", file=sys.stderr)
+    # a grid step is a whole number of 0.1 ms ticks; at 178 BPM a swing eighth is 168.54 ms,
+    # so rounding to milliseconds would drift the music against the brains by 0.3 %
+    step_ticks = round(tune.step_seconds * 1000 * TICKS_PER_MS)
+    drift = abs(step_ticks / TICKS_PER_MS / 1000 - tune.step_seconds) * tune.total_steps
+    if drift > 0.005:
+        print(f"note: grid rounding drifts {drift * 1000:.1f} ms over the take", file=sys.stderr)
     rng = np.random.default_rng(seed)
 
     flies: dict[str, Fly] = {}

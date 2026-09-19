@@ -378,3 +378,26 @@ hl) and side; about 60 to 68 neurons each. Wing MNs are the 56 wing types.
   `head.abc` is an original 5/4 line over those changes, not the melody;
   drop a lead sheet in as ABC or MIDI and re-run `fruitless take` and the sax
   plays that instead.
+
+## 2026-09-19: arrangement mode, and the flies learn a MIDI
+
+- A tune can point at a MIDI arrangement instead of a chart and melody
+  (`arrangement:`, `parts:` mapping roles to track names, `lead:`). Tempo,
+  meter and bar count come from the file; the form is read off the lead
+  part (bars where it plays are `head`, the rest `vamp`); the chart is
+  estimated per half-bar by template match against every m7, maj7 and 7 at
+  every root, with the bass root weighted. The estimate caught a half-step
+  modulation into E minor for the head out that a fixed vocabulary had
+  misread as B major and Bb7.
+- Written-part mappers: the part decides pitch and timing, the fly decides
+  whether the note sounds and how hard. Bass notes need mean leg MN rate
+  above 6 Hz; drum hits are gated by the muscle group that would play them
+  (kick, ride and crash by power MNs, snare and hats by steering MNs, toms by
+  hg); piano chords need EPG rate above 1 Hz and thin to their outer voices
+  when the bump is diffuse, velocity from EPG rate times mushroom body gain.
+  The sax follows the lead part as it already followed a melody.
+- The arrangement file itself stays out of the repo (`tunes/**/*.mid` is
+  ignored): it is the user's copy of a published arrangement.
+- Grid steps are now rounded to 0.1 ms ticks, not milliseconds; at 178 BPM
+  the old rounding would have drifted the music against the brains by about
+  0.6 s over the take.

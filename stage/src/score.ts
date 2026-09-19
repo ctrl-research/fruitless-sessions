@@ -72,7 +72,7 @@ export class Score {
     const laneH = roles.length ? (h - headerH) / roles.length : 0
     // sections
     let bar = 0
-    const colors: Record<string, string> = { head: '#2a2438', solo: '#1f2f3a', trade: '#3a2a1f', free: '#1f3a2a' }
+    const colors: Record<string, string> = { head: '#2a2438', solo: '#1f2f3a', trade: '#3a2a1f', free: '#1f3a2a', vamp: '#26262e' }
     for (const s of this.tune.form) {
       const x0 = x(bar * this.barS), x1 = x((bar + s.bars) * this.barS)
       ctx.fillStyle = colors[s.kind] ?? '#222'
