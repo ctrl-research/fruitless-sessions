@@ -83,13 +83,13 @@ async function main() {
   const performers: Performer[] = []
   const proto = new BrainPoints(take.somaXyz, take.superclass, take.manifest.shared.superclass_legend)
   const R = proto.radius
-  const bodyScale = R * 0.2
+  const bodyScale = R * 0.26
   const meshInfo = (take.manifest as unknown as { meshes?: { index: string } }).meshes
 
   // one shared circular platform; performers in an organic triangular formation on it,
   // rhythm section toward the back, soloists toward the front. Brains float above each fly.
   const n = flies.length
-  const formationR = n === 1 ? 0 : R * (0.55 + 0.32 * n)
+  const formationR = n === 1 ? 0 : R * (0.28 + 0.16 * n)
   const backRole = (r: string) => r === 'drums' ? 0 : r === 'bass' ? 1 : 2      // drums at the back
   const ordered = [...flies].sort((a, b) => backRole(a.entry.role) - backRole(b.entry.role))
   const seats = new Map<string, THREE.Vector3>()
@@ -100,7 +100,7 @@ async function main() {
     const rr = formationR * (i === 0 ? 1.0 : 0.85 + 0.05 * (i % 2))
     seats.set(f.entry.role, new THREE.Vector3(Math.cos(ang) * rr, 0, -Math.sin(ang) * rr + formationR * 0.35))
   })
-  const platformR = formationR + bodyScale * 2.6
+  const platformR = formationR + bodyScale * 2.0
   const platform = new THREE.Mesh(
     new THREE.CylinderGeometry(platformR, platformR * 1.04, bodyScale * 0.35, 64),
     new THREE.MeshStandardMaterial({ color: 0x1a1a24, roughness: 0.85, metalness: 0.1 }),
@@ -139,8 +139,10 @@ async function main() {
     group.position.copy(seat)
     scene.add(group)
     const points = fi === 0 ? proto : new BrainPoints(take.somaXyz, take.superclass, take.manifest.shared.superclass_legend)
-    // brain floats above its fly
-    points.object.position.set(-points.center.x, -points.center.y + R * 0.9, -points.center.z)
+    // brain floats above its fly; brains are wider than the seats are apart, so they fan out
+    // from the platform centre just enough not to touch
+    const fan = seat.clone().multiplyScalar(n > 1 ? Math.max(1, (R * 1.45) / Math.max(1e-6, formationR)) - 1 : 0)
+    points.object.position.set(-points.center.x + fan.x, -points.center.y + R * 0.9, -points.center.z + fan.z)
     group.add(points.object)
     const meshes = new HeroMeshes(base)
     meshes.group.position.copy(points.object.position)
@@ -214,7 +216,7 @@ async function main() {
     // back off until the bandstand's half-width fits the horizontal half-angle of the lens,
     // with margin; re-framed on every resize until the user takes the camera
     // fit both the band's width and the platform-to-brain height, whichever needs more distance
-    const halfWidth = (formationR + R * 1.0) * 1.1
+    const halfWidth = (Math.max(formationR, R * 1.45) + R * 1.0) * 1.1
     const halfHeight = R * 1.15 * 1.1          // platform at -0.35R, brain tops near +1.9R, centred on the look-at
     const tanV = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))
     camDist = Math.max(halfWidth / (tanV * camera.aspect), halfHeight / tanV)
