@@ -70,3 +70,84 @@ mlx-lif-engine at commit `02657cf` (2026-09-15).
 - CI on Linux: mlx installs but cannot load libmlx.so; engine-dependent tests
   now skip there with `importorskip(..., exc_type=ImportError)` and the
   workflow is green.
+
+## 2026-09-19: does the song pathway work in the model?
+
+Before building the sax fly, one biological second per condition, seed 0,
+Poisson drive on the named group, rates in Hz averaged over each group
+(counts from `Session`, 125 ms steps):
+
+| driven group (rate) | pC1_* | pC1x | pIP10 | vPR6 | dPR1 | TN1* | wing MNs | DNp01 | neurons fired |
+|---|---|---|---|---|---|---|---|---|---|
+| pC1_* (50 Hz, 148 neurons) | 58 | 88 | 82 | 0 | 51 | 19 | 30 | 0 | 4,435 |
+| pC1_* (150 Hz) | 167 | 131 | 164 | 0 | 157 | 53 | 61 | 0 | 11,637 |
+| pIP10 (100 Hz, 2 neurons) | 1 | 5 | 99 | 0 | 71 | 27 | 57 | 0 | 4,008 |
+| JO-A*/JO-B* (100 Hz, 138 neurons) | 0 | 0 | 1 | 0 | 3 | 0 | 38 | 17 | 3,122 |
+
+Wing MNs here are the 56 neurons of the explicit wing motor types (`DLMn *`,
+`DVMn *`, `b1..b3 MN`, `hg1..4 MN`, `i1/i2 MN`, `iii1/iii3 MN`, `ps1/ps2 MN`,
+`tp1/tp2 MN`, `tpn MN`).
+
+- The published courtship chain is intact in the wiring: pC1 drives pIP10,
+  pIP10 drives dPR1 and TN1, and wing motor neurons follow, with the response
+  scaling with drive. That is the sax fly's readout path.
+- `vPR6` never fires under any of these drives; it is likely gated by
+  inhibition the model does not release. Leave it in the hero layer, do not
+  read from it.
+- pC1 drive does not recruit the giant fiber. Auditory drive does: 100 Hz on
+  the Johnston's organ afferents fires `DNp01` at 17 Hz and the wing MNs at
+  38 Hz, which is the startle you would expect from a loud sound. Two
+  consequences for the design: flies will startle when the band gets loud
+  (the trading-fours hand-off comes for free), and coupling gains need to be
+  low enough that a fly does not startle continuously.
+- Wall time per biological second rose with activity, 1.0 to 2.2 s, so a
+  loud take costs more than a quiet one.
+
+## 2026-09-19: phase 2, the sax plays the head
+
+- `fruitless take tunes/blues-in-f/tune.yaml` runs a full studio take: one
+  fly (sax), a 12-bar blues in F at 120 BPM, swing eighths, form head, one
+  sax chorus, head out. 36 bars, 288 grid steps of 125 ms, 72 s of biological
+  time. The head is an original riff written for the project, in ABC.
+
+  | measure | value |
+  |---|---|
+  | wall time | 118 s (1.6 s per biological second under this drive) |
+  | total spikes | 6,833,707 |
+  | notes | 132 (93 before solo notes were made to start every beat) |
+  | soma layer, 50 ms bins | 15 MB |
+  | hero layer, 10 ms bins, 641 neurons | 4 MB |
+  | audio, Opus in WebM | 1 MB |
+  | hero meshes, 139 neurons, FSM2 | 41 MB |
+
+  Two runs with the same seed gave identical spike totals: takes are
+  deterministic from seed, tune and pack.
+- Drive: pC1 at 60 Hz while a melody note sounds, 8 Hz on rests, 45 Hz
+  steady in the solo. The head is also played into the ears: JO-A at up to
+  60 Hz for high notes, JO-B for low ones. On the page `jo_a` reads 58 Hz on
+  an F5 and `jo_b` 21 Hz on a C5, so the tonotopy split is visible.
+- Readout (`fruitless.flies.sax`): song_on from TN1 rate, intensity from wing
+  MN population rate, pulse from the coefficient of variation of wing MN
+  spikes across 10 ms bins, pIP10 rate for the page. Mapper rules are in the
+  docstring of `fruitless.conductor.mapper` and covered by tests.
+- Audio: a small deterministic additive synth (`fruitless.render.synth`)
+  renders the notes; ffmpeg encodes Opus (this ffmpeg has no Vorbis). The
+  MIDI file is written too. `tinysoundfont` has an offline `generate` and
+  would take a SoundFont later.
+- Stage: the `<audio>` element is the clock once a take has audio (a detached
+  `new Audio()` never started loading in Chrome; an element in the document
+  does). Score strip shows sections, bar lines, note marks by pitch and the
+  playhead; a caption shows bar, chord, section and the sounding note; a
+  panel shows the motor readouts for the current step. Point updates now
+  touch only neurons with heat, not all 166,700 per frame.
+- Meshes: 641 circuit neurons at float32 were 180 MB, far over budget. Two
+  changes: each fly names `mesh_groups` (sax: pIP10, vPR6, dPR1, TN1, wing
+  MNs, giant fiber, GFC; pC1 and the ears stay as points), and the FSM2
+  format quantizes positions to 16 bits inside each neuron's bounding box with
+  uint16 indices where possible. 139 neurons are now 41 MB. Quadric decimation
+  (pyfqmr) halves triangle counts again and is the next lever when more flies
+  arrive; not wired in yet.
+- Whole bundle for this take: 63 MB. Verified in Chrome: audio and transport
+  agree to a few milliseconds, the pC1 to pIP10 to dPR1 to TN1 to wing MN
+  chain reads live on the strip, and the wing MN meshes glow in the nerve cord
+  while the head plays.

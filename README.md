@@ -6,9 +6,11 @@ jazz ensemble. The product is a static web page that plays a recorded set and,
 in sync with the music, shows each fly's brain activity on its real neuron
 anatomy next to a 3D animated fly playing its instrument.
 
-Status: **phase 1**. Data pipeline, connectome pack, a stateful simulation
-session, the activity bundle format, and a stage page that scrubs a take's
-whole-brain activity and hero neuron meshes. No music and no bodies yet.
+Status: **phase 2**. A studio take runs the sax fly through a tune: the
+courtship song circuit is driven along the melody, wing motor neuron activity
+becomes notes, audio is rendered, and the stage page plays it back with the
+audio as the clock, brain activity on soma points and hero meshes, the chart,
+the form and the motor readouts. One fly, no bodies yet.
 See [`docs/plan.md`](docs/plan.md) for the plan and
 [`docs/reference.md`](docs/reference.md) for the data facts it relies on.
 
@@ -34,9 +36,10 @@ uv run fruitless fetch-data      # ~1.1 GB, three Feather tables, SHA-256 checke
 uv run fruitless pack            # ~90 s, writes data/pack/male_cns_v1 (189 MiB)
 uv run pytest                    # unit tests plus one GPU parity test
 uv run fruitless smoke           # sweet taste drives MN9 for 1 s; writes takes/smoke/
-uv run fruitless bundle takes/smoke                    # -> stage/public/takes/smoke
+uv run fruitless take tunes/blues-in-f/tune.yaml       # ~2 min: 72 s blues, sax only
+uv run fruitless bundle takes/blues-in-f               # -> stage/public/takes/blues-in-f
 uv sync --extra meshes && uv run fruitless meshes stage/public/takes/smoke   # hero meshes
-cd stage && npm install && npm run dev                 # http://localhost:5173/?take=smoke
+cd stage && npm install && npm run dev                 # http://localhost:5173/?take=blues-in-f
 ```
 
 `fruitless select 'JO-A.*' 'JO-B.*'` lists the neurons a type regex selects.
@@ -49,7 +52,10 @@ src/fruitless/
   flies/       neuron selection by MaleCNS annotation; shared circuits
   sim/         Session: the engine's kernels, advanced one grid step at a time
   recording/   binned activity, hero meshes and take bundles the stage reads
+  conductor/   tune files (chart, melody, form), the readout-to-note mapper, the take runner
+  render/      deterministic additive synth, WAV, ffmpeg encode
   cli.py
+tunes/         one directory per tune: tune.yaml plus a melody file
 stage/         the web page: Vite + TypeScript + three.js
 data/sources.lock.json   what bytes the tables are; copied into every take
 docs/                    plan, reference, log

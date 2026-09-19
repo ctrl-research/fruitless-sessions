@@ -1,0 +1,22 @@
+name: blues-in-f
+tempo_bpm: 120
+grid: swing8
+key: F
+form: [head, solo:sax, head]
+chart:
+  - [F7, "", "", ""]
+  - [Bb7, "", "", ""]
+  - [F7, "", "", ""]
+  - [F7, "", "", ""]
+  - [Bb7, "", "", ""]
+  - [Bb7, "", "", ""]
+  - [F7, "", "", ""]
+  - [F7, "", "", ""]
+  - [C7, "", "", ""]
+  - [Bb7, "", "", ""]
+  - [F7, "", "", ""]
+  - [C7, "", "", ""]
+melody: head.abc
+roles: [sax]
+coupling: {}
+free_style: false

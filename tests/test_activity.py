@@ -44,8 +44,8 @@ def test_writer_chunks_and_partial_tail(tmp_path):
 
 def test_fsm_round_trip(tmp_path):
     from fruitless.recording.meshes import read_fsm, write_fsm
-    v = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], dtype=np.float32)
+    v = np.array([[0, 0, 0], [1000, 0, 0], [0, 2000, 500]], dtype=np.float32)
     f = np.array([[0, 1, 2]], dtype=np.uint32)
     write_fsm(tmp_path / "m.fsm", v, f)
     v2, f2 = read_fsm(tmp_path / "m.fsm")
-    assert np.array_equal(v, v2) and np.array_equal(f, f2)
+    assert np.allclose(v, v2, atol=0.05) and np.array_equal(f, f2)   # 16-bit inside the bbox
