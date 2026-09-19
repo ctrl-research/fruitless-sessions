@@ -89,7 +89,7 @@ async function main() {
   // one shared circular platform; performers in an organic triangular formation on it,
   // rhythm section toward the back, soloists toward the front. Brains float above each fly.
   const n = flies.length
-  const formationR = n === 1 ? 0 : R * (0.9 + 0.35 * n)
+  const formationR = n === 1 ? 0 : R * (0.55 + 0.32 * n)
   const backRole = (r: string) => r === 'drums' ? 0 : r === 'bass' ? 1 : 2      // drums at the back
   const ordered = [...flies].sort((a, b) => backRole(a.entry.role) - backRole(b.entry.role))
   const seats = new Map<string, THREE.Vector3>()
@@ -100,7 +100,7 @@ async function main() {
     const rr = formationR * (i === 0 ? 1.0 : 0.85 + 0.05 * (i % 2))
     seats.set(f.entry.role, new THREE.Vector3(Math.cos(ang) * rr, 0, -Math.sin(ang) * rr + formationR * 0.35))
   })
-  const platformR = formationR + bodyScale * 4.5
+  const platformR = formationR + bodyScale * 2.6
   const platform = new THREE.Mesh(
     new THREE.CylinderGeometry(platformR, platformR * 1.04, bodyScale * 0.35, 64),
     new THREE.MeshStandardMaterial({ color: 0x1a1a24, roughness: 0.85, metalness: 0.1 }),
@@ -140,7 +140,7 @@ async function main() {
     scene.add(group)
     const points = fi === 0 ? proto : new BrainPoints(take.somaXyz, take.superclass, take.manifest.shared.superclass_legend)
     // brain floats above its fly
-    points.object.position.set(-points.center.x, -points.center.y + R * 1.05, -points.center.z)
+    points.object.position.set(-points.center.x, -points.center.y + R * 0.9, -points.center.z)
     group.add(points.object)
     const meshes = new HeroMeshes(base)
     meshes.group.position.copy(points.object.position)
@@ -200,7 +200,7 @@ async function main() {
   const controls = new OrbitControls(camera, canvas)
   controls.enableDamping = true
   controls.autoRotate = false
-  const lookAt = new THREE.Vector3(0, R * 0.35, 0)
+  const lookAt = new THREE.Vector3(0, R * 0.7, 0)
   controls.target.copy(lookAt)
   let userMoved = false
   controls.addEventListener('start', () => { userMoved = true })
@@ -213,11 +213,13 @@ async function main() {
     camera.updateProjectionMatrix()
     // back off until the bandstand's half-width fits the horizontal half-angle of the lens,
     // with margin; re-framed on every resize until the user takes the camera
-    const halfWidth = (platformR + R * 0.9) * 1.25
-    const halfAngle = Math.atan(Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect)
-    camDist = halfWidth / Math.tan(halfAngle)
+    // fit both the band's width and the platform-to-brain height, whichever needs more distance
+    const halfWidth = (formationR + R * 1.0) * 1.1
+    const halfHeight = R * 1.15 * 1.1          // platform at -0.35R, brain tops near +1.9R, centred on the look-at
+    const tanV = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))
+    camDist = Math.max(halfWidth / (tanV * camera.aspect), halfHeight / tanV)
     if (!userMoved) {
-      camera.position.set(controls.target.x, R * 0.7, camDist)
+      camera.position.set(controls.target.x, R * 0.95, camDist)
       camera.lookAt(controls.target)
     }
   }
@@ -250,7 +252,7 @@ async function main() {
   const audioSrc = take.manifest.audio ? `${base}/${take.manifest.audio}` : null
   const clock = new AudioClock(transport, audioSrc)
   clock.onBlocked = why => { status.textContent = `audio blocked by the browser (${why.split(':')[0]}); running silent on the frame clock` }
-  ;(window as unknown as { __fs: unknown }).__fs = { transport, clock, take, performers }
+  ;(window as unknown as { __fs: unknown }).__fs = { transport, clock, take, performers, camera, controls }
 
   // score: tune, notes per role, motor readouts
   const tuneInfo = (take.manifest as unknown as { tune?: TuneInfo }).tune ?? null
@@ -364,7 +366,7 @@ async function main() {
     }
     // camera pans (not pivots) toward the soloist until the user takes over
     const pfx = performers[focus].group.position.x
-    camTarget.set(pfx * 0.2, R * 0.35, 0)
+    camTarget.set(pfx * 0.2, R * 0.7, 0)
     if (!userMoved) {
       const kcam = 1 - Math.exp(-dt * 1.5)
       const dx = (camTarget.x - controls.target.x) * kcam
