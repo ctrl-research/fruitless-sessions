@@ -151,3 +151,31 @@ Wing MNs here are the 56 neurons of the explicit wing motor types (`DLMn *`,
   agree to a few milliseconds, the pC1 to pIP10 to dPR1 to TN1 to wing MN
   chain reads live on the strip, and the wing MN meshes glow in the nerve cord
   while the head plays.
+
+## 2026-09-19: phase 3, bodies
+
+- The fly is procedural: `stage/src/body/fly.ts` builds it from capsules,
+  spheres, cylinders and two bezier wing blades, with a Group at every joint
+  (six legs of coxa, femur, tibia, tarsus; two wing hinges; head, antennae,
+  proboscis, abdomen). No model file, no keyframes, no Blender.
+- `stage/src/body/rig.ts` turns the take's motor readouts, the smoothed hero
+  group rates and the sounding notes into a Pose every frame. The rules are
+  data on the rig and the page prints them in a panel. Sax rules: right wing
+  extends ~75° while `song_on` (the one-wing courtship song), vibration
+  amplitude from wing MN rate, faster and jerkier on pulse song, body pitch
+  from intensity, forelegs press the keys on note onsets, proboscis on the
+  mouthpiece while a note sounds, antennae twitch with JO afferent rate, and a
+  startle hop with both wings out when the giant fiber fires.
+- `stage/src/body/instruments.ts` has a saxophone (tube along a spline, cone
+  bell, keys, stand) and a riser. The performer stands to the left of its
+  brain at a body length of about a fifth of the brain's radius.
+- Verified in Chrome by reading the pose off the debug handle while the take
+  plays: right wing 1.30 rad, left 0.12, flap 0.13 rad at 13 Hz, pitch
+  0.08 rad, proboscis 1.0, forelegs raised, all following the readouts.
+- Two page fixes fell out. The transport used to be created only after the
+  41 MB of meshes had loaded, so an early click did nothing; meshes now load
+  behind the transport. And when the browser refuses audio autoplay (which it
+  does for synthetic clicks), the page now says so and runs on the frame clock
+  instead of freezing at zero.
+- Debt: the body is a stylised approximation and its proportions want an
+  artist's pass; only the sax has a rig, the other roles use the idle rig.

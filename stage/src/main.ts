@@ -7,6 +7,9 @@ import { HeroMeshes, type MeshIndex } from './brain/meshes'
 import { Transport } from './transport'
 import { AudioClock } from './clock'
 import { Score, type TuneInfo, type NoteEvent } from './score'
+import { FlyBody, idlePose } from './body/fly'
+import { rigFor } from './body/rig'
+import { riser, saxophone } from './body/instruments'
 
 const params = new URLSearchParams(location.search)
 const takeName = params.get('take') ?? 'smoke'
@@ -46,12 +49,15 @@ async function main() {
   for (const [g, idx] of Object.entries(fly.entry.circuit)) for (const i of idx) groupOfIndex.set(i, g)
   const meshInfo = (take.manifest as unknown as { meshes?: { index: string } }).meshes
   if (meshInfo) {
+    // meshes are the heaviest download; load them behind the transport so the page is
+    // usable at once and the meshes fade in when they arrive
     status.textContent = 'loading hero meshes…'
-    const index: MeshIndex = await (await fetch(`${base}/${meshInfo.index}`)).json()
-    await heroMeshes.load(index, i => groupOfIndex.get(i))
-    scene.add(heroMeshes.group)
-    status.textContent = ''
-    document.getElementById('meta')!.textContent += ` · ${heroMeshes.count} hero meshes (lod ${index.lod})`
+    fetch(`${base}/${meshInfo.index}`).then(r => r.json()).then((index: MeshIndex) =>
+      heroMeshes.load(index, i => groupOfIndex.get(i)).then(() => {
+        scene.add(heroMeshes.group)
+        status.textContent = ''
+        document.getElementById('meta')!.textContent += ` · ${heroMeshes.count} hero meshes (lod ${index.lod})`
+      })).catch(err => { status.textContent = `meshes: ${err}`; console.error(err) })
   }
 
   const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 5000)
@@ -61,7 +67,7 @@ async function main() {
   const controls = new OrbitControls(camera, canvas)
   controls.target.copy(c)
   controls.enableDamping = true
-  controls.autoRotate = true
+  controls.autoRotate = false   // a bandstand has a front; orbit by hand
   controls.autoRotateSpeed = 0.4
   controls.addEventListener('start', () => { controls.autoRotate = false })
 
@@ -74,11 +80,43 @@ async function main() {
   new ResizeObserver(resize).observe(canvas)
   resize()
 
+  // ---------------------------------------------------------------- bandstand
+  // the fly stands on a riser to the left of its brain, at brain scale
+  const bodyScale = points.radius * 0.2
+  const stand = new THREE.Group()
+  stand.position.set(points.center.x - points.radius * 1.6, points.center.y - points.radius * 0.6, points.center.z + points.radius * 0.3)
+  stand.add(riser(bodyScale * 3.2))
+  const performer = new THREE.Group()          // fly + instrument, turned toward the audience
+  performer.rotation.y = 0.75
+  stand.add(performer)
+  const flyBody = new FlyBody(bodyScale)
+  performer.add(flyBody.group)
+  if (fly.entry.role === 'sax') {
+    const horn = saxophone(bodyScale)
+    horn.position.set(0, 0, bodyScale * 0.55)   // in front of the head, mouthpiece at the proboscis
+    performer.add(horn)
+  }
+  scene.add(stand)
+  const stageLight = new THREE.SpotLight(0xfff1d6, 60, points.radius * 3, 0.5, 0.6, 1.2)
+  stageLight.position.set(stand.position.x + bodyScale * 4, stand.position.y + bodyScale * 10, stand.position.z + bodyScale * 6)
+  stageLight.target = stand
+  scene.add(stageLight)
+  const rig = rigFor(fly.entry.role)
+  let prevPose = idlePose()
+  const rigEl = document.getElementById('rig')!
+  rigEl.innerHTML = `<div class="title">rig · ${rig.role}</div>` + rig.rules.map(r =>
+    `<div class="rule"><span class="joint">${r.joint}</span> <span class="from">← ${r.from}</span><div class="text">${r.rule}</div></div>`).join('')
+
+  // widen the camera framing to include the stand
+  controls.target.copy(points.center).add(new THREE.Vector3(-points.radius * 0.75, -points.radius * 0.2, 0))
+  camera.position.set(points.center.x - points.radius * 1.0, points.center.y + points.radius * 0.15, points.center.z + points.radius * 2.4)
+
   // ---------------------------------------------------------------- transport
   const duration = take.manifest.duration_s || soma.durationS
   const transport = new Transport(duration, document.getElementById('transport')!)
   const audioSrc = take.manifest.audio ? `${base}/${take.manifest.audio}` : null
   const clock = new AudioClock(transport, audioSrc)
+  clock.onBlocked = why => { status.textContent = `audio blocked by the browser (${why.split(':')[0]}); running silent on the frame clock` }
   ;(window as unknown as { __fs: unknown }).__fs = { transport, clock, take }
 
   // score: tune, notes per role, motor readouts
@@ -122,7 +160,7 @@ async function main() {
   // ---------------------------------------------------------------- loop
   function frame(now: number) {
     const dt = transport.tick(now)
-    if (clock.audio && transport.playing) transport.sync(clock.time())
+    if (clock.audio && clock.active && transport.playing) transport.sync(clock.time())
     const tNow = transport.time
     const bin = soma.binAt(tNow)
     soma.prefetch(bin)
@@ -172,6 +210,20 @@ async function main() {
     if (motor && tuneInfo) {
       const step = Math.min(motor.steps - 1, Math.max(0, Math.floor(tNow / tuneInfo.step_s)))
       motor.names.forEach((_, i) => { motorVals[i].textContent = motor.data[step * motor.names.length + i].toFixed(1) })
+    }
+    // body from the same signals as the music
+    {
+      const step = motor && tuneInfo ? Math.min(motor.steps - 1, Math.max(0, Math.floor(tNow / tuneInfo.step_s))) : 0
+      const readout: Record<string, number> = {}
+      if (motor) motor.names.forEach((n, i) => { readout[n] = motor.data[step * motor.names.length + i] })
+      const rates: Record<string, number> = {}
+      groups.forEach(([g], gi) => { rates[g] = groupSmooth[gi] })
+      const sounding = score ? score.soundingAt(fly.entry.role, tNow) : []
+      const noteAge = sounding.length ? tNow - Math.max(...sounding.map(n => n.t)) : 0
+      prevPose = rig.pose({ readout, rates, noteOn: sounding.length > 0, noteAge, t: tNow }, prevPose, dt)
+      flyBody.apply(prevPose, transport.playing ? dt : 0)
+      ;(window as unknown as { __fs: { pose?: unknown; readout?: unknown } }).__fs.pose = prevPose
+      ;(window as unknown as { __fs: { pose?: unknown; readout?: unknown } }).__fs.readout = readout
     }
     points.update(dt)
     heroMeshes.update(dt)

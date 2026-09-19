@@ -252,12 +252,16 @@ Each phase ends with something you can open in a browser.
   tinysoundfont (which has an offline `generate`) is the upgrade if wanted.
 
 ### Phase 3: bodies (weeks 5-6)
-- Rigged fly model (Blender, glTF): six legs, wings, head, antennae,
-  proboscis, abdomen. Stylised, not photoreal. Instruments as props.
+- Fly model: six legs, wings, head, antennae, proboscis, abdomen. Stylised,
+  not photoreal. Built procedurally in three.js (chosen over a Blender glTF so
+  there are no asset files and joints are plain Groups). Instruments as props.
 - Rig driver: motor readouts to joint angles, one mapping module per role,
   displayed on the page.
 - **Done when:** the sax fly stands on stage, extends one wing and vibrates
-  it while the head plays, and startles when `DNp01` fires.
+  it while the head plays, and startles when `DNp01` fires. **Done
+  2026-09-19** as a procedural three.js body rather than a Blender asset; the
+  startle rule is in the rig but no take has fired DNp01 yet. See
+  `docs/log.md`.
 
 ### Phase 4: the rhythm section (weeks 7-8)
 - Bass and drums flies, their readouts, their rig mappings, their meshes.
