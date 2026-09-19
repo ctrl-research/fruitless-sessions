@@ -39,7 +39,7 @@ function common(inp: RigInputs, p: Pose, startle: { until: number }): void {
     p.wingExtend = [1.3, 1.3]
     p.wingFlap = 0.5
     p.wingHz = 14
-    for (const leg of p.legs) { leg[1] = 0.9; leg[2] = -0.6 }   // legs tuck
+    for (const leg of p.legs) { leg[1] = -0.5; leg[2] = 0.9 }   // legs tuck up
   }
 }
 
@@ -48,7 +48,7 @@ export const saxRig: Rig = {
   rules: [
     { joint: 'right wing extension', from: 'song_on', rule: 'extends ~75° while the song circuit is on (one-wing courtship song), folds back when off' },
     { joint: 'wing vibration', from: 'intensity', rule: 'amplitude = wing MN rate / 80 Hz; pulse song (pulse > 0.9) beats faster and jerkier' },
-    { joint: 'body pitch', from: 'intensity', rule: 'leans forward up to 12° with wing MN rate' },
+    { joint: 'body pitch', from: 'intensity', rule: 'stands up to the horn; leans in up to 12° with wing MN rate' },
     { joint: 'forelegs', from: 'notes', rule: 'press the keys on each note onset; middle and hind legs hold the stand' },
     { joint: 'proboscis', from: 'notes', rule: 'on the mouthpiece while a note sounds' },
     { joint: 'antennae', from: 'jo_a + jo_b', rule: 'twitch with auditory afferent rate (the fly hearing the band)' },
@@ -65,14 +65,16 @@ export const saxRig: Rig = {
     p.wingExtend = [0.12, lerp(prev.wingExtend[1], targetExt, k)]
     p.wingFlap = lerp(prev.wingFlap, on ? clamp(intensity / 80, 0.05, 1) * 0.35 : 0, k)
     p.wingHz = pulse > 0.9 ? 22 : 13
-    p.bodyPitch = lerp(prev.bodyPitch, clamp(intensity / 80, 0, 1) * 0.21, k)
-    // sax posture: raise the front, forelegs up on the horn
-    p.legs[0] = [0.9, -0.3, -0.9]
-    p.legs[3] = [0.9, -0.3, -0.9]
+    // stands up to the horn: nose up ~35°, leaning further in with intensity
+    p.bodyPitch = lerp(prev.bodyPitch, -0.6 + clamp(intensity / 80, 0, 1) * 0.2, k)
+    p.bodyHeight = 0.25
+    // sax posture: forelegs up on the horn
+    p.legs[0] = [0.9, -0.7, 1.2]
+    p.legs[3] = [0.9, -0.7, 1.2]
     if (inp.noteOn) {
       const press = Math.exp(-inp.noteAge * 8)
-      p.legs[0][2] -= 0.35 * press
-      p.legs[3][2] -= 0.35 * (1 - press) * 0.5
+      p.legs[0][1] -= 0.3 * press
+      p.legs[3][1] -= 0.3 * (1 - press) * 0.5
       p.proboscis = 1
       p.headYaw = 0.05 * Math.sin(inp.t * 6)
     } else {
@@ -104,18 +106,19 @@ export const bassRig: Rig = {
       const lift = clamp(rate / 40, 0, 1)
       const target: [number, number, number] = [
         idlePose().legs[i][0] + 0.35 * lift * (i % 3 === 0 ? 1 : i % 3 === 2 ? -1 : 0),
-        0.35 + 0.55 * lift,
-        -1.2 + 0.5 * lift,
+        0.15 - 0.6 * lift,          // femur rises as the leg lifts
+        1.8 - 0.7 * lift,           // tibia unfolds as it swings
       ]
       p.legs[i] = [lerp(prev.legs[i][0], target[0], k), lerp(prev.legs[i][1], target[1], k), lerp(prev.legs[i][2], target[2], k)]
     }
     if (inp.noteOn) {
       const pluck = Math.exp(-inp.noteAge * 10)
-      p.legs[0][2] -= 0.4 * pluck   // left foreleg on the strings
+      p.legs[0][1] -= 0.45 * pluck   // left foreleg lifts to pluck the strings
     }
     const load = inp.readout['load'] ?? 0
     p.bodyHeight = lerp(prev.bodyHeight, 0.08 * Math.sin(inp.t * 2 * Math.PI * 2) * clamp(load / 30, 0, 1), k)
-    p.bodyPitch = 0.1
+    p.bodyPitch = -0.45           // stands up to the neck of the upright
+    p.bodyHeight += 0.18
     common(inp, p, this as unknown as { until: number })
     return p
   },
@@ -142,11 +145,11 @@ export const drumsRig: Rig = {
     p.wingExtend = [lerp(prev.wingExtend[0], 0.9, k), lerp(prev.wingExtend[1], 0.9, k)]
     p.wingFlap = lerp(prev.wingFlap, 0.15 + 0.5 * amp, k)
     p.wingHz = burst > 0.9 ? 9 : 5   // slowed far below biology so the strokes read as hits
-    p.bodyPitch = lerp(prev.bodyPitch, 0.05 + clamp(steer / 60, 0, 1) * 0.2, k)
-    p.legs[0] = [0.7, 0.1, -1.0]; p.legs[3] = [0.7, 0.1, -1.0]   // forelegs up, sticks
+    p.bodyPitch = lerp(prev.bodyPitch, -0.2 + clamp(steer / 60, 0, 1) * 0.25, k)   // sits up behind the kit, leans in on the snare
+    p.legs[0] = [0.7, -0.6, 1.3]; p.legs[3] = [0.7, -0.6, 1.3]   // forelegs up, sticks
     if (inp.noteOn) {
       const stamp = Math.exp(-inp.noteAge * 12)
-      p.legs[5][1] += 0.4 * stamp   // right hind leg on the pedal
+      p.legs[5][1] -= 0.4 * stamp   // right hind leg lifts to stamp the pedal
     }
     common(inp, p, this as unknown as { until: number })
     return p
