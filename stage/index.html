@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fruitless Sessions</title>
+  </head>
+  <body>
+    <header>
+      <div>
+        <h1>Fruitless Sessions <span class="phase">stage · phase 1</span></h1>
+        <div id="title" class="sub"></div>
+      </div>
+      <div id="meta" class="meta"></div>
+    </header>
+    <main>
+      <canvas id="stage"></canvas>
+      <aside id="readout" class="readout"></aside>
+      <div id="status" class="status"></div>
+    </main>
+    <footer id="transport" class="transport"></footer>
+    <p class="note">
+      A leaky integrate-and-fire model of the MaleCNS v1.0 wiring (Shiu et al. 2024 constants), not a fly.
+      Dots are neurons at their soma positions; a dot glows when the model neuron spiked in that time bin.
+      MaleCNS is CC BY 4.0, FlyEM at HHMI Janelia and collaborators.
+    </p>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

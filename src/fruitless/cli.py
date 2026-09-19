@@ -124,9 +124,28 @@ def cmd_smoke(args) -> int:
         "hero_layer": hmeta,
         "pack_dataset": pack.manifest.get("dataset"),
         "seed": args.seed,
+        "circuit": {"sweet_grn": sweet.tolist(), "MN9_L": mn9["MN9_L"].tolist(),
+                    "MN9_R": mn9["MN9_R"].tolist(), "DNp01": gf.tolist()},
     }
     (out / "smoke.json").write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))
+    return 0
+
+
+def cmd_bundle(args) -> int:
+    """Assemble a take bundle for the stage from a take directory (e.g. takes/smoke)."""
+    from lif import core
+    from fruitless.recording.bundle import FlySpec, default_stage_dir, write_bundle
+    pack = core.load_pack(args.pack, verify_hashes=False)
+    take = Path(args.take)
+    report = json.loads((take / "smoke.json").read_text()) if (take / "smoke.json").is_file() else {}
+    layers = {d.name: d for d in take.iterdir() if (d / "activity.json").is_file()}
+    fly = FlySpec(role=args.role, layers=layers, circuit=report.get("circuit", {}))
+    out = Path(args.out) if args.out else default_stage_dir() / args.name
+    m = write_bundle(out, args.name, pack, [fly], duration_s=report.get("seconds_bio", 0.0),
+                     seed=report.get("seed"), extra={"smoke": report} if report else None)
+    print(f"bundle: {out}  flies={[f['role'] for f in m['flies']]}  duration={m['duration_s']}s  "
+          f"soma={m['shared']['with_soma']}/{m['shared']['n_neurons']}")
     return 0
 
 
@@ -156,7 +175,17 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--chunk-s", type=float, default=10.0)
     p.set_defaults(fn=cmd_smoke)
 
+    p = sub.add_parser("bundle", help="assemble a take bundle for the stage from a take directory")
+    p.add_argument("take", type=Path, help="e.g. takes/smoke")
+    p.add_argument("--name", default=None)
+    p.add_argument("--role", default="smoke")
+    p.add_argument("--pack", type=Path, default=paths.PACK)
+    p.add_argument("--out", type=Path, default=None, help="default stage/public/takes/<name>")
+    p.set_defaults(fn=cmd_bundle)
+
     args = ap.parse_args(argv)
+    if getattr(args, "cmd", None) == "bundle" and args.name is None:
+        args.name = Path(args.take).name
     return args.fn(args)
 
 
