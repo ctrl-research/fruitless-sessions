@@ -343,3 +343,24 @@ hl) and side; about 60 to 68 neurons each. Wing MNs are the 56 wing types.
 - Mesh budget is now the concern: four flies are 765 hero neurons and 57 MB
   even after decimation; the blues bundle is 118 MB. Sharing meshes between
   bundles or dropping the ear groups from the hero layers is the next lever.
+
+## 2026-09-19: phase 6, publishing
+
+- Shared assets. Soma positions and superclass codes moved to
+  `stage/public/takes/shared/` and hero meshes to a single store at
+  `stage/public/takes/meshes/` with a `store.json`; each bundle keeps its own
+  `meshes.json` listing the subset it draws and points at the store with
+  `../meshes/<idx>.fsm`. The store prunes neurons no bundle references. The
+  takes root went from 221 MB to 156 MB with three takes; a second four-fly
+  take now costs 37 MB (activity layers and audio) instead of 93.
+- `scripts/publish` builds the stage under the `/fruitless-sessions/` base
+  path and force-pushes one orphan commit to `gh-pages`, so the branch never
+  grows. `.github/workflows/pages.yml` deploys that branch. Publishing is a
+  local step because the build needs the takes and those need Metal.
+- Reproducibility: every take records `counts_sha256`, a digest of each fly's
+  per-neuron spike counts. Same seed, tune, pack and engine give the same
+  digest; earlier phases already showed identical spike totals across reruns.
+- README has the stage screenshot, the publish and reproduce sections and the
+  honest scope paragraph. Not yet done: the actual first publish (the repo is
+  private; GitHub Pages on a private repository needs a paid plan, and the
+  alternative is the homelab cluster), and the `awesome-fly` submission.

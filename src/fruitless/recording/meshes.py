@@ -101,30 +101,26 @@ def decimate(vertices: np.ndarray, faces: np.ndarray, ratio: float) -> tuple[np.
 
 def fetch_meshes(bundle: Path, neuron_ids: np.ndarray, indices: np.ndarray, lod: int = 3,
                  overwrite: bool = False, prune: bool = True, decimate_ratio: float = 0.35) -> dict:
-    """Fetch and write the meshes of the given pack indices; returns the index document.
+    """Fetch the meshes of the given pack indices into the shared store `<takes root>/meshes/`
+    and write this bundle's own `meshes.json` index pointing at them.
 
-    prune removes meshes in the directory that are not in `indices`, so a bundle
-    carries exactly its flies' mesh groups."""
-    out = Path(bundle) / "meshes"
-    out.mkdir(parents=True, exist_ok=True)
-    index_path = out / "index.json"
-    doc = json.loads(index_path.read_text()) if index_path.is_file() else {"lod": lod, "voxel_nm": VOXEL_NM, "neurons": {}}
-    if doc.get("format") != "fsm2" or doc.get("decimate") != decimate_ratio:
-        # older float32 files: refetch everything
-        doc = {"lod": lod, "voxel_nm": VOXEL_NM, "format": "fsm2", "decimate": decimate_ratio, "neurons": {}}
-        for f in out.glob("*.fsm"):
+    Every take of the same pack shares the store, so a neuron fetched for one bundle is free
+    for the next. `prune` removes store files no bundle's index references any more."""
+    bundle = Path(bundle)
+    store = bundle.parent / "meshes"
+    store.mkdir(parents=True, exist_ok=True)
+    store_index = store / "store.json"
+    sdoc = json.loads(store_index.read_text()) if store_index.is_file() else {}
+    if sdoc.get("format") != "fsm2" or sdoc.get("lod") != lod or sdoc.get("decimate") != decimate_ratio:
+        sdoc = {"lod": lod, "voxel_nm": VOXEL_NM, "format": "fsm2", "decimate": decimate_ratio, "neurons": {}}
+        for f in store.glob("*.fsm"):
             f.unlink()
     wanted = {str(int(i)) for i in np.unique(np.asarray(indices)).tolist()}
-    if prune:
-        for key in list(doc["neurons"]):
-            if key not in wanted:
-                (out / f"{key}.fsm").unlink(missing_ok=True)
-                del doc["neurons"][key]
     cv = None
     for i in sorted(int(k) for k in wanted):
         key = str(i)
-        path = out / f"{i}.fsm"
-        if path.is_file() and key in doc["neurons"] and not overwrite:
+        path = store / f"{i}.fsm"
+        if path.is_file() and key in sdoc["neurons"] and not overwrite:
             continue
         body = int(neuron_ids[i])
         cv = cv or _volume()
@@ -136,11 +132,30 @@ def fetch_meshes(bundle: Path, neuron_ids: np.ndarray, indices: np.ndarray, lod:
         n_raw = faces.shape[0]
         verts, faces = decimate(verts, faces, decimate_ratio)
         write_fsm(path, verts, faces)
-        doc["neurons"][key] = {"bodyId": body, "vertices": int(verts.shape[0]),
-                               "triangles": int(faces.shape[0]), "file": f"meshes/{i}.fsm",
-                               "bytes": path.stat().st_size}
+        sdoc["neurons"][key] = {"bodyId": body, "vertices": int(verts.shape[0]),
+                                "triangles": int(faces.shape[0]), "file": f"../meshes/{i}.fsm",
+                                "bytes": path.stat().st_size}
         print(f"  mesh {i:7d} bodyId {body:12d}  {verts.shape[0]:7,d} v {faces.shape[0]:8,d} t "
               f"(of {n_raw:,d})  {time.perf_counter() - t:.1f}s", file=sys.stderr)
-        index_path.write_text(json.dumps(doc, indent=1) + "\n")
-    index_path.write_text(json.dumps(doc, indent=1) + "\n")
+        store_index.write_text(json.dumps(sdoc, indent=1) + "\n")
+    if prune:
+        referenced = set(wanted)
+        for other in bundle.parent.iterdir():
+            idx = other / "meshes.json"
+            if other != bundle and idx.is_file():
+                referenced |= set(json.loads(idx.read_text()).get("neurons", {}))
+        for key in list(sdoc["neurons"]):
+            if key not in referenced:
+                (store / f"{key}.fsm").unlink(missing_ok=True)
+                del sdoc["neurons"][key]
+    store_index.write_text(json.dumps(sdoc, indent=1) + "\n")
+    doc = {k: v for k, v in sdoc.items() if k != "neurons"}
+    doc["neurons"] = {k: sdoc["neurons"][k] for k in sorted(wanted, key=int) if k in sdoc["neurons"]}
+    (bundle / "meshes.json").write_text(json.dumps(doc, indent=1) + "\n")
+    # an old per-bundle mesh directory is superseded by the store
+    legacy = bundle / "meshes"
+    if legacy.is_dir():
+        for f in legacy.glob("*"):
+            f.unlink()
+        legacy.rmdir()
     return doc

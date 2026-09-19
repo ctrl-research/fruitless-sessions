@@ -6,14 +6,16 @@ jazz ensemble. The product is a static web page that plays a recorded set and,
 in sync with the music, shows each fly's brain activity on its real neuron
 anatomy next to a 3D animated fly playing its instrument.
 
-Status: **phase 5**. Four flies, sax, bass, drums and piano, play a blues
-and a free-style session together, coupled through their ears. Each is the
-full 166,700-neuron brain: the courtship song circuit sings the head,
-connectome-derived leg premotor pools walk the bass, wing motor neurons beat
-the kit, the central complex heading ring names the key and the mushroom body
-gates the pianist's touch. The page plays a take back with the audio as the
-clock: brains lit by their spikes above procedural flies on one stage, posed
-from the same motor readouts that made the notes.
+![the stage: four flies on one platform under a spotlight, their brains floating above them](docs/stage.jpg)
+
+Status: **phase 6, publishing**. Four flies, sax, bass, drums and piano,
+play a blues and a free-style session together, coupled through their ears.
+Each is the full 166,700-neuron brain: the courtship song circuit sings the
+head, connectome-derived leg premotor pools walk the bass, wing motor neurons
+beat the kit, the central complex heading ring names the key and the mushroom
+body gates the pianist's touch. The page plays a take back with the audio as
+the clock: brains lit by their spikes above procedural flies on one stage,
+posed from the same motor readouts that made the notes.
 See [`docs/plan.md`](docs/plan.md) for the plan and
 [`docs/reference.md`](docs/reference.md) for the data facts it relies on.
 
@@ -49,6 +51,28 @@ cd stage && npm install && npm run dev                 # http://localhost:5173/?
 
 `fruitless select 'JO-A.*' 'JO-B.*'` lists the neurons a type regex selects.
 
+## Publishing
+
+The simulation needs Apple silicon, so the site is built here and pushed:
+
+```bash
+scripts/publish                  # builds stage/dist with every bundled take, force-pushes gh-pages
+```
+
+`.github/workflows/pages.yml` deploys whatever is on `gh-pages`. Soma
+positions, superclass codes and hero meshes live once under
+`stage/public/takes/shared` and `stage/public/takes/meshes`; each take adds
+only its activity layers and audio (a four-fly 72 s blues is about 60 MB, the
+shared store 58 MB).
+
+## Reproducing a take
+
+A take is a pure function of seed, tune, pack and engine commit. Every
+`take.json` records a SHA-256 of each fly's per-neuron spike counts under
+`counts_sha256`; run the same tune with the same seed and compare. The pack's
+own array hashes and the source tables' hashes are in the bundle manifest
+under `provenance`.
+
 ## Layout
 
 ```
@@ -61,6 +85,7 @@ src/fruitless/
   render/      deterministic additive synth, WAV, ffmpeg encode
   cli.py
 tunes/         one directory per tune: tune.yaml plus a melody file
+scripts/       publish; the stage has scripts/pose-check.ts for body work
 stage/         the web page: Vite + TypeScript + three.js (src/body: fly, rig, instruments)
 data/sources.lock.json   what bytes the tables are; copied into every take
 docs/                    plan, reference, log

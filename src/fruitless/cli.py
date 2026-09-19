@@ -189,10 +189,10 @@ def cmd_meshes(args) -> int:
                   for i in members})
     if args.indices:
         idx = sorted(set(idx) | set(args.indices))
-    print(f"{len(idx)} hero neurons -> {bundle / 'meshes'} (lod {args.lod})", file=sys.stderr)
+    print(f"{len(idx)} hero neurons -> {bundle.parent / 'meshes'} (shared store, lod {args.lod})", file=sys.stderr)
     doc = fetch_meshes(bundle, pack.neuron_ids, np.array(idx, dtype=np.int64), lod=args.lod,
                        overwrite=args.overwrite, decimate_ratio=args.decimate)
-    manifest["meshes"] = {"index": "meshes/index.json", "lod": args.lod, "decimate": args.decimate,
+    manifest["meshes"] = {"index": "meshes.json", "lod": args.lod, "decimate": args.decimate,
                           "n": len(doc["neurons"]),
                           "vertices": sum(m["vertices"] for m in doc["neurons"].values()),
                           "bytes": sum(m.get("bytes", 0) for m in doc["neurons"].values())}

@@ -16,6 +16,7 @@ fly's ears as Poisson input on JO-A (upper) and JO-B (lower) afferents.
 from __future__ import annotations
 
 import functools
+import hashlib
 import json
 import sys
 import time
@@ -288,6 +289,10 @@ def run_take(tune_path: Path, out: Path, seed: int = 0, pack_dir: Path = paths.P
             el = time.perf_counter() - t_wall
             print(f"  bar {bar + 1:3d}/{tune.total_bars} {sec.kind:5s} {el:6.1f}s wall  spikes {total_spikes:,}", file=sys.stderr)
     wall = time.perf_counter() - t_wall
+    # a fingerprint of every fly's per-neuron spike counts: same seed, tune, pack and engine give
+    # the same digest, so a take can be checked for reproducibility without the recordings
+    counts_sha256 = {role: hashlib.sha256(np.ascontiguousarray(sessions[role].total_counts().astype(np.int32)).tobytes()).hexdigest()
+                     for role in flies}
 
     # ------------------------------------------------------------ outputs
     manifest_flies, audio = write_outputs(out, tune, flies, mappers, seed, render_audio,
@@ -310,6 +315,7 @@ def run_take(tune_path: Path, out: Path, seed: int = 0, pack_dir: Path = paths.P
         "seconds_bio": tune.duration_s,
         "seconds_wall": round(wall, 1),
         "total_spikes": total_spikes,
+        "counts_sha256": counts_sha256,
         "audio": audio,
         "flies": manifest_flies,
         "drive": {"pc1_note_hz": PC1_NOTE_HZ, "pc1_rest_hz": PC1_REST_HZ, "pc1_solo_hz": PC1_SOLO_HZ,
