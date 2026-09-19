@@ -89,7 +89,7 @@ async function main() {
   // one shared circular platform; performers in an organic triangular formation on it,
   // rhythm section toward the back, soloists toward the front. Brains float above each fly.
   const n = flies.length
-  const formationR = n === 1 ? 0 : R * (0.28 + 0.16 * n)
+  const formationR = n === 1 ? 0 : R * (0.4 + 0.22 * n)
   const backRole = (r: string) => r === 'drums' ? 0 : r === 'bass' ? 1 : 2      // drums at the back
   const ordered = [...flies].sort((a, b) => backRole(a.entry.role) - backRole(b.entry.role))
   const seats = new Map<string, THREE.Vector3>()
@@ -100,7 +100,7 @@ async function main() {
     const rr = formationR * (i === 0 ? 1.0 : 0.85 + 0.05 * (i % 2))
     seats.set(f.entry.role, new THREE.Vector3(Math.cos(ang) * rr, 0, -Math.sin(ang) * rr + formationR * 0.35))
   })
-  const platformR = formationR + bodyScale * 2.0
+  const platformR = formationR + bodyScale * 1.2   // keeps the disc about the size it was before the seats spread
   const platform = new THREE.Mesh(
     new THREE.CylinderGeometry(platformR, platformR * 1.04, bodyScale * 0.35, 64),
     new THREE.MeshStandardMaterial({ color: 0x1a1a24, roughness: 0.85, metalness: 0.1 }),
