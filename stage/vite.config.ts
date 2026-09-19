@@ -1,8 +1,8 @@
 import { defineConfig } from 'vite'
 
-// The site is published under a path (GitHub Pages serves a project site at /<repo>/).
-// `VITE_BASE` overrides it; the dev server always runs at /.
+// The site is published at the root of its own domain (fruitless-sessions.j6n.dev via GitHub
+// Pages). `VITE_BASE` overrides it, e.g. VITE_BASE=/fruitless-sessions/ for a project page.
 export default defineConfig(({ command }) => ({
-  base: command === 'serve' ? '/' : (process.env.VITE_BASE ?? '/fruitless-sessions/'),
+  base: command === 'serve' ? '/' : (process.env.VITE_BASE ?? '/'),
   build: { chunkSizeWarningLimit: 900 },
 }))
