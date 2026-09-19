@@ -4,9 +4,13 @@
 export class Transport {
   time = 0                 // seconds of biological time
   playing = false
-  speed = 0.25             // biological seconds per wall second (slow motion by default)
+  speed = 1                // playback rate; audio takes cannot go below 0.25
   private last = 0
   private onSeek: (() => void)[] = []
+  onPlay: (() => void) | null = null
+  onPause: (() => void) | null = null
+  onSeekAudio: ((t: number) => void) | null = null
+  onSpeed: ((s: number) => void) | null = null
   readonly duration: number
   private root: HTMLElement
 
@@ -24,8 +28,8 @@ export class Transport {
       <input class="range" type="range" min="0" max="${this.duration}" step="0.001" value="0" />
       <span class="time">0.000 s</span>
       <select class="speed" title="playback speed (biological seconds per wall second)">
-        <option value="0.1">0.1×</option><option value="0.25" selected>0.25×</option>
-        <option value="0.5">0.5×</option><option value="1">1×</option>
+        <option value="0.1">0.1×</option><option value="0.25">0.25×</option>
+        <option value="0.5">0.5×</option><option value="1" selected>1×</option>
       </select>`
     this.el = {
       play: this.root.querySelector('.play')!,
@@ -35,20 +39,23 @@ export class Transport {
     }
     this.el.play.onclick = () => this.toggle()
     this.el.range.oninput = () => { this.seek(parseFloat(this.el.range.value)) }
-    this.el.speed.onchange = () => { this.speed = parseFloat(this.el.speed.value) }
+    this.el.speed.onchange = () => { this.speed = parseFloat(this.el.speed.value); this.onSpeed?.(this.speed) }
     window.addEventListener('keydown', e => {
       if (e.code === 'Space' && !(e.target instanceof HTMLInputElement)) { e.preventDefault(); this.toggle() }
     })
   }
 
   toggle() { this.playing ? this.pause() : this.play() }
-  play() { this.playing = true; this.last = performance.now(); this.el.play.textContent = '❚❚' }
-  pause() { this.playing = false; this.el.play.textContent = '▶' }
+  play() { this.playing = true; this.last = performance.now(); this.el.play.textContent = '❚❚'; this.onPlay?.() }
+  pause() { this.playing = false; this.el.play.textContent = '▶'; this.onPause?.() }
   seek(t: number) {
     this.time = Math.max(0, Math.min(this.duration, t))
+    this.onSeekAudio?.(this.time)
     this.onSeek.forEach(f => f())
     this.refresh()
   }
+  /** Adopt an externally authoritative time (the audio element). */
+  sync(t: number) { this.time = t; this.refresh() }
   addSeekListener(f: () => void) { this.onSeek.push(f) }
 
   /** Advance if playing; returns wall dt in seconds. */

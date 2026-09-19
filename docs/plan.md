@@ -244,8 +244,12 @@ Each phase ends with something you can open in a browser.
   MIDI. Offline audio render. First full bundle.
 - Stage: audio element as clock, transport with waveform and form markers,
   MIDI notes shown and linked to the readout neurons that fired.
-- **Done when:** the page plays a 30 second sax head of a standard, and the
-  wing MN meshes light in time with the notes you hear.
+- **Done when:** the page plays a sax head over changes, and the wing MN
+  meshes light in time with the notes you hear. **Done 2026-09-19** with a
+  72 second blues (head, one sax chorus, head) and an original test head;
+  see `docs/log.md`. Audio is rendered by a small deterministic additive
+  synth so a take's sound rebuilds from its notes; a SoundFont path via
+  tinysoundfont (which has an offline `generate`) is the upgrade if wanted.
 
 ### Phase 3: bodies (weeks 5-6)
 - Rigged fly model (Blender, glTF): six legs, wings, head, antennae,
