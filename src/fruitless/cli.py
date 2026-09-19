@@ -135,6 +135,7 @@ def cmd_smoke(args) -> int:
 def cmd_bundle(args) -> int:
     """Assemble a take bundle for the stage from a take directory (e.g. takes/smoke)."""
     from lif import core
+
     from fruitless.recording.bundle import FlySpec, default_stage_dir, write_bundle
     pack = core.load_pack(args.pack, verify_hashes=False)
     take = Path(args.take)
@@ -146,6 +147,28 @@ def cmd_bundle(args) -> int:
                      seed=report.get("seed"), extra={"smoke": report} if report else None)
     print(f"bundle: {out}  flies={[f['role'] for f in m['flies']]}  duration={m['duration_s']}s  "
           f"soma={m['shared']['with_soma']}/{m['shared']['n_neurons']}")
+    return 0
+
+
+def cmd_meshes(args) -> int:
+    """Fetch hero meshes for a bundle: every neuron in its flies' circuit groups."""
+    from lif import core
+
+    from fruitless.recording.meshes import fetch_meshes
+    pack = core.load_pack(args.pack, verify_hashes=False)
+    bundle = Path(args.bundle)
+    manifest = json.loads((bundle / "take.json").read_text())
+    idx = sorted({i for f in manifest["flies"] for g in f["circuit"].values() for i in g})
+    if args.indices:
+        idx = sorted(set(idx) | set(args.indices))
+    print(f"{len(idx)} hero neurons -> {bundle / 'meshes'} (lod {args.lod})", file=sys.stderr)
+    doc = fetch_meshes(bundle, pack.neuron_ids, np.array(idx, dtype=np.int64), lod=args.lod,
+                       overwrite=args.overwrite)
+    manifest["meshes"] = {"index": "meshes/index.json", "lod": args.lod,
+                          "n": len(doc["neurons"]),
+                          "vertices": sum(m["vertices"] for m in doc["neurons"].values())}
+    (bundle / "take.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    print(json.dumps(manifest["meshes"]))
     return 0
 
 
@@ -182,6 +205,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--pack", type=Path, default=paths.PACK)
     p.add_argument("--out", type=Path, default=None, help="default stage/public/takes/<name>")
     p.set_defaults(fn=cmd_bundle)
+
+    p = sub.add_parser("meshes", help="fetch hero neuron meshes into a bundle (needs --extra meshes)")
+    p.add_argument("bundle", type=Path, help="e.g. stage/public/takes/smoke")
+    p.add_argument("--pack", type=Path, default=paths.PACK)
+    p.add_argument("--lod", type=int, default=3, help="3 is coarsest (~28k vertices for a big MN)")
+    p.add_argument("--indices", type=int, nargs="*", default=None, help="extra pack indices")
+    p.add_argument("--overwrite", action="store_true")
+    p.set_defaults(fn=cmd_meshes)
 
     args = ap.parse_args(argv)
     if getattr(args, "cmd", None) == "bundle" and args.name is None:

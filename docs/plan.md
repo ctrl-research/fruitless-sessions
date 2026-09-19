@@ -233,7 +233,9 @@ Each phase ends with something you can open in a browser.
 - Hero mesh pipeline: fetch the sax circuit meshes via `navis` and
   `cloud-volume`, convert to glTF, draw on top.
 - **Done when:** you can scrub through phase 0's recording in the browser and
-  watch `DNp01` and its partners light up on the mesh layer.
+  watch the driven circuit light up on the mesh layer. **Done 2026-09-19**
+  with the sweet GRN to `MN9` pathway (DNp01 is silent under that drive);
+  see `docs/log.md`.
 
 ### Phase 2: the sax plays the head (weeks 3-4)
 - Sax fly: drive `pC1_*` and confirm `pIP10`, `vPR6`, `dPR1`, `TN1*` and wing

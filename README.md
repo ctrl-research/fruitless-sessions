@@ -6,8 +6,9 @@ jazz ensemble. The product is a static web page that plays a recorded set and,
 in sync with the music, shows each fly's brain activity on its real neuron
 anatomy next to a 3D animated fly playing its instrument.
 
-Status: **phase 0**. Data pipeline, connectome pack, a stateful simulation
-session and the activity bundle format exist. No music, no page, no bodies yet.
+Status: **phase 1**. Data pipeline, connectome pack, a stateful simulation
+session, the activity bundle format, and a stage page that scrubs a take's
+whole-brain activity and hero neuron meshes. No music and no bodies yet.
 See [`docs/plan.md`](docs/plan.md) for the plan and
 [`docs/reference.md`](docs/reference.md) for the data facts it relies on.
 
@@ -33,6 +34,9 @@ uv run fruitless fetch-data      # ~1.1 GB, three Feather tables, SHA-256 checke
 uv run fruitless pack            # ~90 s, writes data/pack/male_cns_v1 (189 MiB)
 uv run pytest                    # unit tests plus one GPU parity test
 uv run fruitless smoke           # sweet taste drives MN9 for 1 s; writes takes/smoke/
+uv run fruitless bundle takes/smoke                    # -> stage/public/takes/smoke
+uv sync --extra meshes && uv run fruitless meshes stage/public/takes/smoke   # hero meshes
+cd stage && npm install && npm run dev                 # http://localhost:5173/?take=smoke
 ```
 
 `fruitless select 'JO-A.*' 'JO-B.*'` lists the neurons a type regex selects.
@@ -44,8 +48,9 @@ src/fruitless/
   data/        release tables: lock file, fetch, annotations
   flies/       neuron selection by MaleCNS annotation; shared circuits
   sim/         Session: the engine's kernels, advanced one grid step at a time
-  recording/   binned activity in the bundle format the stage reads
+  recording/   binned activity, hero meshes and take bundles the stage reads
   cli.py
+stage/         the web page: Vite + TypeScript + three.js
 data/sources.lock.json   what bytes the tables are; copied into every take
 docs/                    plan, reference, log
 tests/

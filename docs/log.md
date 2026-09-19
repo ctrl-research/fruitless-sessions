@@ -38,3 +38,35 @@ mlx-lif-engine at commit `02657cf` (2026-09-15).
   138 neurons; `pC1.*`, `pIP10`, `vPR6`, `dPR1`, `TN1.*` select 203; the broad
   `.* MN` regex selects 398 and includes leg types, so wing motor neurons must
   be listed explicitly.
+
+## 2026-09-19: phase 1, the stage skeleton
+
+- `stage/` is a Vite + TypeScript + three.js page. It loads a take bundle,
+  draws the 139,662 soma points that have a position (x right, body axis
+  vertical so the brain sits above the ventral nerve cord, y as depth), and
+  colors them from the 50 ms soma layer while a transport scrubs. Playback is
+  a requestAnimationFrame clock at 0.1x to 1x until audio exists.
+- `fruitless bundle takes/smoke` assembles `stage/public/takes/smoke/`:
+  take.json, shared soma positions (float32 per pack index, NaN when none,
+  2.0 MB), superclass codes (166 KB), the copied activity layers and the
+  smoke report with its circuit groups.
+- `fruitless meshes <bundle>` fetches hero neuron meshes from the release's
+  precomputed multi-resolution Draco source over public HTTPS with
+  cloud-volume (optional extra `meshes`). LOD 3 is the coarsest and enough:
+  the 21 smoke neurons are 178k vertices and 5.5 MB in the FSM1 format
+  (float32 positions in voxels, uint32 triangles). The two giant fibers are
+  the largest at 64k and 58k vertices; MN9_L is 28k; a sweet GRN is about 1k.
+  Fetch took 19 s for 21 neurons, most of it per-request latency.
+- Verified in Chrome: the giant fibers run from the brain down the neck into
+  the nerve cord as expected, MN9_L glows amber while the readout strip shows
+  it at 60 to 70 Hz, the sweet GRNs glow, MN9_R and DNp01 stay dark. The plan's
+  acceptance line named DNp01; under the sweet drive it is silent, so the
+  pathway watched is sweet GRN to MN9, which is the one the engine validates.
+- Readout rates are per 10 ms bin (one spike = 100 Hz), smoothed with a 0.1
+  exponential moving average, and the loop walks every bin skipped by a slow
+  frame so the first frame's shader compile stall does not drop spikes.
+- Known visual debt: the optic lobes saturate to white because 89k points
+  overlap; point size and opacity want a pass once there are several flies.
+- CI on Linux: mlx installs but cannot load libmlx.so; engine-dependent tests
+  now skip there with `importorskip(..., exc_type=ImportError)` and the
+  workflow is green.
