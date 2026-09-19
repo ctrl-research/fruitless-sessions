@@ -15,9 +15,10 @@ npm run build >/dev/null
 SIZE=$(du -sh dist | cut -f1)
 echo "built dist ($SIZE)"
 TMP="$(mktemp -d)"
-git -C "$ROOT" worktree add --detach "$TMP" >/dev/null 2>&1
+git -C "$ROOT" worktree add --detach "$TMP"
 ( cd "$TMP"
-  git checkout --orphan gh-pages >/dev/null 2>&1
+  # a throwaway orphan branch; pushed to gh-pages by ref so a stale local gh-pages never blocks it
+  git checkout --orphan "publish-$$"
   git rm -rfq . >/dev/null 2>&1 || true
   cp -R "$ROOT/stage/dist/." .
   touch .nojekyll
@@ -26,7 +27,9 @@ git -C "$ROOT" worktree add --detach "$TMP" >/dev/null 2>&1
   cp "$ROOT/.github/workflows/pages.yml" .github/workflows/pages.yml
   git add -A
   git -c user.name="fruitless publish" -c user.email="noreply@ctrl-research" commit -qm "publish $(date -u +%Y-%m-%dT%H:%MZ) from $(git -C "$ROOT" rev-parse --short HEAD)"
-  git push -f origin gh-pages
+  git push -f origin "HEAD:gh-pages"
 )
 git -C "$ROOT" worktree remove --force "$TMP"
+git -C "$ROOT" branch -D "publish-$$" >/dev/null 2>&1 || true
+git -C "$ROOT" branch -D gh-pages >/dev/null 2>&1 || true
 echo "pushed gh-pages ($SIZE); the Pages workflow deploys it: gh run list --workflow pages.yml"
