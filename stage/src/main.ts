@@ -149,26 +149,34 @@ async function main() {
     group.position.copy(seat)
     scene.add(group)
     const points = fi === 0 ? proto : new BrainPoints(take.somaXyz, take.superclass, take.manifest.shared.superclass_legend)
-    // brain floats above its fly; brains are wider than the seats are apart, so they fan out
-    // from the platform centre just enough not to touch
+    // brains are wider than the seats are apart, so they fan out from the platform centre
+    // just enough not to touch; performers standing forward hang theirs very slightly lower
     const fanX = n > 1 ? seat.x * (Math.max(1, (R * 1.45) / Math.max(1e-6, formationR)) - 1) : 0
-    // brains of performers standing forward hang a little lower, so a front and a back brain
-    // do not stack in the view
     const zs = [...seats.values()].map(v => v.z)
     const zMin = Math.min(...zs), zMax = Math.max(...zs)
     const forwardness = zMax > zMin ? (seat.z - zMin) / (zMax - zMin) : 0
-    points.object.position.set(-points.center.x + fanX, -points.center.y + R * (0.9 - 0.1 * forwardness), -points.center.z)
-    group.add(points.object)
+    const yaw = Math.atan2(-seat.x, Math.abs(seat.z) + formationR) * 0.6 + 0.35
+    // the brain floats above its fly in the fly's own orientation: laid flat, dorsal side up,
+    // brain at the head end pointing where the fly faces, nerve cord trailing behind
+    const holder = new THREE.Group()
+    holder.position.set(fanX, R * (0.95 - 0.1 * forwardness), 0)
+    holder.rotation.y = yaw
+    holder.scale.setScalar(0.72)        // face-on brains are wide; a little smaller keeps neighbours apart
+    const tilt = new THREE.Group()
+    tilt.rotation.x = Math.PI / 2       // the point cloud is built body-axis-vertical; this lays it flat
+    holder.add(tilt)
     const meshes = new HeroMeshes(base)
+    points.object.position.set(-points.center.x, -points.center.y, -points.center.z)
     meshes.group.position.copy(points.object.position)
-    group.add(meshes.group)
+    tilt.add(points.object, meshes.group)
+    group.add(holder)
     brainGroups.push(points.object, meshes.group)
     const stand = new THREE.Group()
     stand.position.set(0, -R * 0.35, 0)
     const performer = new THREE.Group()
     // face the audience (+Z), turned a little toward the centre of the platform; the piano
     // sits side-on like a real stage piano so the pianist is seen in profile at the keys
-    performer.rotation.y = Math.atan2(-seat.x, Math.abs(seat.z) + formationR) * 0.6 + 0.35
+    performer.rotation.y = yaw
     stand.add(performer)
     const body = new FlyBody(bodyScale)
     performer.add(body.group)
@@ -220,7 +228,7 @@ async function main() {
   const controls = new OrbitControls(camera, canvas)
   controls.enableDamping = true
   controls.autoRotate = false
-  const lookAt = new THREE.Vector3(0, R * 0.7, 0)
+  const lookAt = new THREE.Vector3(0, R * 0.45, 0)
   controls.target.copy(lookAt)
   let userMoved = false
   controls.addEventListener('start', () => { userMoved = true })
@@ -235,11 +243,11 @@ async function main() {
     // with margin; re-framed on every resize until the user takes the camera
     // fit both the band's width and the platform-to-brain height, whichever needs more distance
     const halfWidth = (Math.max(reach, R * 1.45) + R * 1.0) * 1.1
-    const halfHeight = R * 1.15 * 1.1          // platform at -0.35R, brain tops near +1.9R, centred on the look-at
+    const halfHeight = R * 1.0 * 1.1           // platform at -0.35R, flat brains top out near +1.3R
     const tanV = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))
     camDist = Math.max(halfWidth / (tanV * camera.aspect), halfHeight / tanV) * 1.15 + formationR * 0.6   // the front pair stands forward of the centre
     if (!userMoved) {
-      camera.position.set(controls.target.x, R * 0.95, camDist)
+      camera.position.set(controls.target.x, R * 0.8, camDist)
       camera.lookAt(controls.target)
     }
   }
@@ -389,7 +397,7 @@ async function main() {
     }
     // camera pans (not pivots) toward the soloist until the user takes over
     const pfx = performers[focus].group.position.x
-    camTarget.set(pfx * 0.2, R * 0.7, 0)
+    camTarget.set(pfx * 0.2, R * 0.45, 0)
     if (!userMoved) {
       const kcam = 1 - Math.exp(-dt * 1.5)
       const dx = (camTarget.x - controls.target.x) * kcam
