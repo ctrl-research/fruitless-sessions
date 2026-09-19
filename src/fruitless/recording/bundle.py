@@ -152,7 +152,6 @@ def write_index(stage_takes: Path) -> list[dict]:
         entries.append({
             "name": m["name"], "path": d.name, "duration_s": m.get("duration_s", 0),
             "roles": [f["role"] for f in m.get("flies", [])],
-            "iterations": m.get("iterations", 1),
             "tune": (m.get("tune") or {}).get("name"),
             "audio": bool(m.get("audio")),
         })

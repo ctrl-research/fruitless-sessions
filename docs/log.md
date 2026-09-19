@@ -401,3 +401,8 @@ hl) and side; about 60 to 68 neurons each. Wing MNs are the 56 wing types.
 - Grid steps are now rounded to 0.1 ms ticks, not milliseconds; at 178 BPM
   the old rounding would have drifted the music against the brains by about
   0.6 s over the take.
+
+- Dropped the run count from the take dropdown. It counted how many times
+  `take` or `remap` had been run while building and read as if the flies had
+  trained. Nothing here trains: a take is one deterministic pass. The
+  `iterations` field stays in `take.json` as plain bookkeeping.
