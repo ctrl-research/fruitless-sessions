@@ -157,6 +157,40 @@ export const drumsRig: Rig = {
 }
 ;(drumsRig as unknown as { until: number }).until = 0
 
+export const pianoRig: Rig = {
+  role: 'piano',
+  rules: [
+    { joint: 'head yaw', from: 'bump_deg', rule: 'turns toward the key the ring points at: left for flats, right for sharps' },
+    { joint: 'forelegs', from: 'notes', rule: 'both forelegs drop onto the keys on each comp' },
+    { joint: 'body pitch', from: 'epg_hz', rule: 'leans over the keyboard with EPG population rate' },
+    { joint: 'abdomen', from: 'mb_gain', rule: 'swells when the mushroom body output is above baseline (reward), shrinks below it' },
+    { joint: 'antennae', from: 'jo_a + jo_b', rule: 'twitch with auditory afferent rate' },
+    { joint: 'whole body', from: 'giant_fiber', rule: 'startle hop with both wings out when DNp01 fires' },
+  ],
+  pose(inp, prev, dt) {
+    const p = idlePose()
+    const k = 1 - Math.exp(-dt * 8)
+    const deg = inp.readout['bump_deg'] ?? 180
+    const epg = inp.readout['epg_hz'] ?? 0
+    const gain = inp.readout['mb_gain'] ?? 1
+    // ring angle -> head yaw, -50°..+50°, centred on C
+    const yaw = ((((deg + 180) % 360) - 180) / 180) * 0.87
+    p.headYaw = lerp(prev.headYaw, yaw, k)
+    p.bodyPitch = lerp(prev.bodyPitch, -0.35 + clamp(epg / 40, 0, 1) * 0.25, k)
+    p.bodyHeight = 0.2
+    p.legs[0] = [0.95, -0.55, 1.1]; p.legs[3] = [0.95, -0.55, 1.1]   // forelegs over the keys
+    if (inp.noteOn) {
+      const press = Math.exp(-inp.noteAge * 10)
+      p.legs[0][1] += 0.35 * press
+      p.legs[3][1] += 0.35 * press
+    }
+    p.abdomenScale = lerp(prev.abdomenScale, 0.85 + 0.3 * clamp(gain - 0.5, 0, 1), k)
+    common(inp, p, this as unknown as { until: number })
+    return p
+  },
+}
+;(pianoRig as unknown as { until: number }).until = 0
+
 export const idleRig: Rig = {
   role: 'idle',
   rules: [{ joint: 'all', from: 'nothing', rule: 'standing; breathing only' }],
@@ -165,5 +199,5 @@ export const idleRig: Rig = {
 ;(idleRig as unknown as { until: number }).until = 0
 
 export function rigFor(role: string): Rig {
-  return role === 'sax' ? saxRig : role === 'bass' ? bassRig : role === 'drums' ? drumsRig : idleRig
+  return role === 'sax' ? saxRig : role === 'bass' ? bassRig : role === 'drums' ? drumsRig : role === 'piano' ? pianoRig : idleRig
 }

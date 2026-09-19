@@ -1,0 +1,13 @@
+name: fruitless-session-1
+tempo_bpm: 132
+grid: swing8
+key: C
+form: ["free:24"]      # 24 bars, no chart, no melody; the piano's ring names the key each bar
+chart: []
+roles: [sax, bass, drums, piano]
+coupling:              # a little hotter than the blues: this is where the band listens to itself
+  sax:   {bass: 0.4, drums: 0.4, piano: 0.5}
+  bass:  {sax: 0.5, drums: 0.6, piano: 0.3}
+  drums: {sax: 0.5, bass: 0.6, piano: 0.3}
+  piano: {sax: 0.7, bass: 0.4, drums: 0.3}
+free_style: true

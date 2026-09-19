@@ -278,3 +278,68 @@ hl) and side; about 60 to 68 neurons each. Wing MNs are the 56 wing types.
   dropdown fed by `stage/public/takes/index.json`, which `fruitless bundle`
   writes. Each entry shows how many runs of `take` and `remap` produced the
   result, counted in the take's `iterations` field.
+
+## 2026-09-19: does the ring hold a bump? (phase 5 probe)
+
+- EPG instances carry protocerebral bridge glomerulus labels, `EPG(PB08)_L1`
+  .. `_L8` and `_R1` .. `_R8`, so each of the 46 EPGs has a ring angle:
+  wedge k at (k - 0.5)/8 of a turn. PEN_a and PEN_b carry the same labels;
+  Delta7 spans glomeruli (`Delta7(PB15)_L4R5_R`).
+- The attractor's wiring is present: EPG to Delta7 is strongly excitatory
+  (summed +19,896), Delta7 to EPG inhibitory (-4,294, ring-wide), and EPG to
+  PEN to EPG is locally positive (effective diagonal 7,451 vs off-diagonal
+  2,065).
+- The dynamics are not. Driving one wedge's six EPGs at 60 Hz gives a clean
+  bump (population vector magnitude 1.0 at the driven angle), but in the
+  100 ms after the drive stops the ring is silent. There is no persistent
+  activity in this LIF with these constants, so no memory of heading.
+  PEN_a drive on one side alone (10 neurons at 40 Hz) yields 20 to 35 EPG
+  spikes per 100 ms with a wandering vector (magnitude 0.1 to 0.5), not a
+  rotation.
+- Consequence: the piano fly's key is written into the ring by the conductor
+  (the chord root as a driven EPG wedge, the way a visual landmark would set
+  heading) and read back as the population vector. What the fly adds is the
+  ring's own noise, inertia and crosstalk. In free style there is no chart, so
+  the ring is pushed only by the ear imbalance through PEN_a left and right,
+  and the key wanders. The page says so.
+
+## 2026-09-19: phase 5, the pianist, the mushroom body and free style
+
+- Piano fly (`fruitless.flies.piano`): EPG wedges from the protocerebral
+  bridge labels, PEN_a left and right, PAM and PPL1 as drive groups; readout
+  is the EPG population vector (angle and magnitude), EPG rate, MBON rate and
+  an `mb_gain` (MBON rate over its running baseline, 0.5 to 1.5). Eight
+  wedges map onto the circle of fifths; `key_from_bump` is the exact inverse
+  of `wedge_for_pitch_class` (tested for all twelve keys).
+- Comping (`PianoMapper`): rootless voicings on beats 2 and 4 and the "and"
+  of 4, two-note shells when the bump is diffuse, four notes when sharp,
+  velocity from EPG rate times `mb_gain`, silent when the ring is quiet.
+- Mushroom body teaching signal: at each beat the soloist's most recent note
+  is checked against the chord; a chord tone drives PAM at 50 Hz (reward), a
+  note outside the scale drives PPL1 at 50 Hz (punishment). MBON output over
+  baseline then scales the pianist's touch. No plasticity is modelled; this
+  is a gain, and the page says so.
+- Free style (`tunes/fruitless-session-1`, 24 bars at 132, no chart, no
+  melody): the tune's key seeds bar 1; each bar line the piano's bump names
+  the key as a dominant seventh, which everyone else plays on. The ring is
+  held on its current key at 33 Hz (a chart gives 60) while the ear imbalance
+  pushes PEN_a, so the key wanders. First run nobody but the drums played:
+  uniform background drive gives a near-zero population vector, so no key was
+  ever named. Seeding and holding fixed it.
+
+  | take | wall | spikes | notes (sax / bass / drums / piano) | bundle |
+  |---|---|---|---|---|
+  | blues-in-f, four flies, 72 s | 448 s | 20.2 M | 132 / 144 / 258 / 282 | 118 MB |
+  | fruitless-session-1, four flies, 44 s | 254 s | 12.1 M | 99 / 96 / 173 / 144 | 93 MB |
+
+  Keys the ring named in the session, bar by bar: C7 C7 C7 F7 F7 Eb7 A7 B7 B7
+  Gb7 C7 F7 Eb7 A7 A7 B7 Gb7 F7 Eb7 A7 A7 A7 A7 A7. It moves in fourths and
+  fifths and settles late, which is what a wedge ring pushed by ear imbalance
+  should do.
+- Stage: a small upright piano, a piano rig (head yaw follows the bump, both
+  forelegs drop on comps, abdomen swells with mushroom body gain), the caption
+  shows the key the ring named in free style, one score lane per member, and
+  seating with the sax on the outer side of the bassist.
+- Mesh budget is now the concern: four flies are 765 hero neurons and 57 MB
+  even after decimation; the blues bundle is 118 MB. Sharing meshes between
+  bundles or dropping the ear groups from the hero layers is the next lever.

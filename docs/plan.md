@@ -50,7 +50,7 @@ signal seen three ways.
 | Drums | Wing motor neurons `DLMn *`, `DVMn *`, `b1 MN`..`tp2 MN`; steering DN `DNa02` | Power, steering and hg MN rates, burstiness | Kit: power = kick and ride, steering = snare and hi-hat, hg = toms, giant fiber = crash | Wings beat the kit; hind leg stamps the pedal |
 | Bass | Leg MNs (`Ti flexor MN`, `Tr extensor MN`, ...) by `subclass` fl/ml/hl, driven through each leg's connectome-derived excitatory premotor pool (walking DNs shown, not effective in the model) | Six leg-group rates, tripod step flags | Bass, footfall = note | Legs walk the bass line; forelegs pluck on footfall |
 | Sax (soloist) | `pC1_*` cluster, `pIP10`, `vPR6`, `dPR1`, `TN1a_*`/`TN1c_*`, wing MNs | Pulse vs sine song, intensity | Lead voice | One wing extended and vibrating, as in real courtship song; body pitch with intensity |
-| Piano (comping) | Central complex `EPG`, `EPGt`, `PEN_a(PEN1)`, `PEN_b(PEN2)`, `Delta7` | Bump position on the ring (12 wedges = circle of fifths) | Chord voicings | Head turns with the bump heading; forelegs on the keys by wedge |
+| Piano (comping) | Central complex `EPG`, `PEN_a(PEN1)`, `PEN_b(PEN2)`, `Delta7`; mushroom body `KC*`, `MBON*`, `PAM*`, `PPL1*` | Bump angle and magnitude (8 wedges onto the circle of fifths), EPG rate, MBON gain | Rootless voicings on 2 and 4 | Head turns with the bump heading; forelegs drop on the keys; abdomen swells with reward |
 | Ears (all) | `JO-A*`, `JO-B*`, `AMMC*` | input only | none | Antennae twitch with input rate |
 | Learning (all) | `KC*`, `MBON*`, `PAM*`, `PPL1*` | reward and punishment | modulates readout gain | none |
 | Singer (stretch) | FlyWire female v783: JO, `pC1*`, `vpoDN` | accept / reject | resolves or refuses the tune | Approaches or walks away |
@@ -286,8 +286,19 @@ Each phase ends with something you can open in a browser.
 - Piano fly on the central complex bump; chart changes rotate the bump.
 - Dopaminergic reward gating readout gain when a consonance check passes.
 - First free-style tune with no chart and no melody.
+- **Design change from the probe** (`docs/log.md`, "does the ring hold a
+  bump?"): the ring's wiring is present but the LIF has no persistent
+  activity, so a bump lasts only while driven. The conductor writes the chord
+  root into the ring as a driven EPG wedge (a landmark setting heading) and the
+  fly reads the population vector back; in free style only the ear imbalance
+  pushes PEN_a left and right, and the key the ring points at at each bar line
+  becomes the band's chord. Reward: PAM dopaminergic neurons are driven when
+  the soloist's last note is a chord tone on a beat, PPL1 when it is outside
+  the scale; MBON rate relative to baseline scales the piano's velocity.
 - **Done when:** a four fly standard plays its head recognisably and solos on
   the changes; a free-style take shows the EPG bump wandering on the page.
+  **Done 2026-09-19**; the wander shows as the key the caption names each bar
+  and in the pianist's head yaw. See `docs/log.md`.
 
 ### Phase 6: publish (week 11)
 - Data budget met, bundles chunked, site on GitHub Pages or the cluster.

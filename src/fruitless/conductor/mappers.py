@@ -9,6 +9,14 @@ Bass rules
   duration   until the next footfall, at most one beat (walking bass)
   register   E1..G3
 
+Piano rules
+  comps on beats 2 and 4 and on the "and" of 4 (anticipation), rootless
+  voicings of the current chord: third, fifth, seventh plus the ninth when the
+  bump is sharp (bump_mag > 0.6), a two-note shell when it is diffuse.
+  velocity   from EPG population rate, 0..40 Hz -> 45..100, times mb_gain
+  register   voicing centred near the bump angle mapped onto C3..C5
+  free style the chord is whatever key the bump points at, as a dominant 7th
+
 Drums rules (GM drum map)
   kick 36    when power MN rate rises above its running mean on a beat
   ride 51    every beat while power rate > 20 Hz, velocity from rate
@@ -132,6 +140,57 @@ class DrumsMapper:
         if gf > 5 and t > self._crash_until:
             self._hit(t, CRASH, 110, step, "crash")
             self._crash_until = t + 1.0
+
+    def finish(self, _t_end: float) -> list[Note]:
+        return sorted(self.notes, key=lambda n: n.t)
+
+
+PIANO_LOW, PIANO_HIGH = 48, 72
+KEY_ORDER = [0, 7, 2, 9, 4, 11, 6, 1, 8, 3, 10, 5]   # circle of fifths from C
+
+
+def key_from_bump(deg: float) -> int:
+    """Pitch class at a ring angle: eight wedges around the circle of fifths.
+
+    Inverse of Piano.wedge_for_pitch_class, which puts fifths position f at wedge
+    floor(f * 8 / 12): wedge k0 reads back as fifths position floor(1.5 k0 + 0.75),
+    so wedges 0..7 name C D A B F# Ab Eb F."""
+    k0 = int(np.floor((deg % 360) / 360.0 * 8))           # wedge 0..7
+    return KEY_ORDER[int(np.floor(1.5 * k0 + 0.75)) % 12]
+
+
+@dataclass
+class PianoMapper:
+    tune: Tune
+    role: str = "piano"
+    notes: list[Note] = field(default_factory=list)
+
+    def on_step(self, step: int, readout: dict[str, float]) -> None:
+        tune = self.tune
+        spb = tune.steps_per_beat
+        beat = (step % tune.steps_per_bar) // spb
+        on_beat = step % spb == 0
+        and_of_four = beat == 3 and step % spb == spb // 2 and spb > 1
+        if not ((on_beat and beat in (1, 3)) or and_of_four):
+            return
+        chord = tune.chord_at(step)
+        if chord is None:
+            return
+        tones, _ = chord_pitch_classes(chord, tune.key)
+        mag = readout.get("bump_mag", 0.0)
+        epg = readout.get("epg_hz", 0.0)
+        gain = readout.get("mb_gain", 1.0)
+        if epg < 1.0:
+            return                                          # the ring is silent: no comp
+        third, fifth, seventh = (tones[1:2] or tones[:1])[0], (tones[2:3] or tones[:1])[0], (tones[3:4] or tones[:1])[0]
+        pcs = [third, seventh] if mag < 0.6 else [third, fifth, seventh, (tones[0] + 2) % 12]
+        centre = PIANO_LOW + (readout.get("bump_deg", 180.0) / 360.0) * (PIANO_HIGH - PIANO_LOW)
+        t = step * tune.step_seconds + tune.swing_offset_s(step)
+        vel = int(np.clip((45 + epg / 40.0 * 55.0) * gain, 30, 115))
+        dur = 0.9 * tune.step_seconds * (2 if and_of_four else 1)
+        for pc in pcs:
+            midi = _nearest(pc, PIANO_LOW, PIANO_HIGH, round(centre))
+            self.notes.append(Note(t, dur, midi, vel, step, self.role, "comp"))
 
     def finish(self, _t_end: float) -> list[Note]:
         return sorted(self.notes, key=lambda n: n.t)

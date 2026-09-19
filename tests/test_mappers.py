@@ -61,3 +61,49 @@ def test_drums_crash_on_giant_fiber_once_per_second():
     m.on_step(2, _drums(gf=20.0))
     notes = [n for n in m.finish(t.duration_s) if n.midi == CRASH]
     assert len(notes) == 1
+
+
+def _piano(bump_deg=90.0, bump_mag=0.8, epg_hz=20.0, mb_gain=1.0):
+    return {"bump_deg": bump_deg, "bump_mag": bump_mag, "epg_hz": epg_hz, "mbon_hz": 5.0, "mb_gain": mb_gain, "pam_hz": 0.0}
+
+
+def test_piano_comps_on_two_and_four_with_chord_tones():
+    from fruitless.conductor.mappers import PianoMapper
+    t = load_tune(TUNE)
+    m = PianoMapper(t)
+    for step in range(t.steps_per_bar):        # one bar of F7
+        m.on_step(step, _piano())
+    notes = m.finish(t.duration_s)
+    steps = sorted({n.step for n in notes})
+    assert steps == [2, 6, 7]                  # beats 2 and 4, and the "and" of 4
+    assert all(n.midi % 12 in {9, 0, 3, 7} for n in notes)   # A C Eb G: 3rd 5th 7th 9th of F7
+
+
+def test_piano_shell_voicing_when_bump_is_diffuse_and_silent_when_ring_is_quiet():
+    from fruitless.conductor.mappers import PianoMapper
+    t = load_tune(TUNE)
+    m = PianoMapper(t)
+    m.on_step(2, _piano(bump_mag=0.2))         # diffuse: two-note shell
+    m.on_step(6, _piano(epg_hz=0.0))           # ring silent: nothing
+    notes = m.finish(t.duration_s)
+    assert len(notes) == 2 and all(n.step == 2 for n in notes)
+
+
+def test_piano_velocity_scales_with_mushroom_body_gain():
+    from fruitless.conductor.mappers import PianoMapper
+    t = load_tune(TUNE)
+    lo = PianoMapper(t); lo.on_step(2, _piano(mb_gain=0.6))
+    hi = PianoMapper(t); hi.on_step(2, _piano(mb_gain=1.4))
+    assert lo.finish(1)[0].vel < hi.finish(1)[0].vel
+
+
+def test_key_from_bump_walks_the_circle_of_fifths():
+    from fruitless.conductor.mappers import key_from_bump
+    from fruitless.flies.piano import Piano
+    assert key_from_bump(0.0) == 0            # C at the start of the ring
+    assert key_from_bump(46.0) == 2           # wedge 2: D
+    assert key_from_bump(350.0) == 5          # last wedge: F
+    for pc in range(12):                      # every key reads back from the wedge it is written to
+        w = Piano.wedge_for_pitch_class(pc)
+        deg = (w - 0.5) / 8 * 360
+        assert Piano.wedge_for_pitch_class(key_from_bump(deg)) == w
