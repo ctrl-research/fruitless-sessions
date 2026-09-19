@@ -41,6 +41,7 @@ class Tune:
     melody: list[tuple[float, float, int]] = field(default_factory=list)  # (start_beat, dur_beats, midi)
     source_dir: Path | None = None
     free_chord: str | None = None     # set by the conductor in free style (from the piano's bump)
+    meter_beats: int = 4              # beats per bar (4 for 4/4, 5 for 5/4); the beat is a quarter
 
     # ------------------------------------------------------------ timing
     @property
@@ -49,7 +50,7 @@ class Tune:
 
     @property
     def beats_per_bar(self) -> int:
-        return 4
+        return self.meter_beats
 
     @property
     def steps_per_bar(self) -> int:
@@ -153,7 +154,10 @@ def chord_pitch_classes(symbol: str, key_name: str) -> tuple[tuple[int, ...], tu
     k = (symbol, key_name)
     if k in _chord_cache:
         return _chord_cache[k]
-    sym = symbol.replace("maj7", "M7").replace("m7b5", "m7b5").replace("Δ", "M7")
+    sym = symbol.replace("maj7", "M7").replace("Δ", "M7")
+    # jazz spelling "Eb" -> music21 spelling "E-" for the root's flat (alterations like b5 stay)
+    if len(sym) > 1 and sym[1] == "b":
+        sym = sym[0] + "-" + sym[2:]
     cs = harmony.ChordSymbol(sym)
     root = cs.root().pitchClass
     # chord tones ordered from the root upward: root, third, fifth, seventh
@@ -229,8 +233,13 @@ def load_tune(path: Path) -> Tune:
             bars = s.bars * chorus
         filled.append(Section(s.kind, s.who, bars, s.trade_bars))
     melody = _load_melody(path.parent / doc["melody"]) if doc.get("melody") else []
+    meter = str(doc.get("meter", "4/4"))
+    beats = int(meter.split("/")[0])
+    if meter.split("/")[1] != "4":
+        raise ValueError(f"meter {meter}: only quarter-note beats are supported")
     return Tune(
         name=doc["name"], tempo_bpm=float(doc.get("tempo_bpm", 120)), grid=doc.get("grid", "swing8"),
+        meter_beats=beats,
         key=doc.get("key", "C"), chart=chart, form=filled, roles=roles,
         coupling=doc.get("coupling", {}), free_style=bool(doc.get("free_style", False)),
         melody=melody, source_dir=path.parent,

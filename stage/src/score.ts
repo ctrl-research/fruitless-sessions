@@ -7,6 +7,8 @@ export interface TuneInfo {
   key: string
   step_s: number
   steps_per_bar: number
+  beats_per_bar?: number
+  meter?: string
   total_steps: number
   duration_s: number
   chart: string[][]
@@ -42,7 +44,7 @@ export class Score {
     const chart = this.tune.chart
     if (!chart.length) return ''
     const bar = this.barAt(t) % chart.length
-    const beatS = this.barS / 4
+    const beatS = this.barS / (this.tune.beats_per_bar ?? 4)
     const beat = Math.floor((t - this.barAt(t) * this.barS) / beatS)
     const row = chart[bar]
     for (let b = Math.min(beat, row.length - 1); b >= 0; b--) if (row[b]) return row[b]

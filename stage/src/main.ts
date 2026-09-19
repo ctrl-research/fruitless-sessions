@@ -392,7 +392,7 @@ async function main() {
       const sounding = performers.flatMap(pf => pf.notes.filter(n => n.t <= tNow && tNow < n.t + n.dur).map(n => `${pf.entry.role[0]}:${noteName(n.midi)}`))
       const freeKeys = (take.manifest as unknown as { free_keys?: (string | null)[] }).free_keys
       const chordLabel = score.chordAt(tNow) || (freeKeys ? (freeKeys[score.barAt(tNow)] ?? 'finding the key…') + ' (from the ring)' : '–')
-      nowEl.textContent = `bar ${score.barAt(tNow) + 1} · ${chordLabel} · ${sec ? sec.kind + (sec.who.length && sec.kind !== 'free' ? ' ' + sec.who.join('/') : '') : ''}` +
+      nowEl.textContent = `bar ${score.barAt(tNow) + 1}${tuneInfo?.meter && tuneInfo.meter !== '4/4' ? ' (' + tuneInfo.meter + ')' : ''} · ${chordLabel} · ${sec ? sec.kind + (sec.who.length && sec.kind !== 'free' ? ' ' + sec.who.join('/') : '') : ''}` +
         (sounding.length ? ` · ♪ ${sounding.slice(0, 6).join(' ')}` : '')
     }
     // camera pans (not pivots) toward the soloist until the user takes over

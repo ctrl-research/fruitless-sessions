@@ -107,3 +107,17 @@ def test_key_from_bump_walks_the_circle_of_fifths():
         w = Piano.wedge_for_pitch_class(pc)
         deg = (w - 0.5) / 8 * 360
         assert Piano.wedge_for_pitch_class(key_from_bump(deg)) == w
+
+
+def test_drums_five_four_accents():
+    from pathlib import Path as _P
+    t = load_tune(_P(__file__).resolve().parents[1] / "tunes" / "take-five" / "tune.yaml")
+    m = DrumsMapper(t)
+    for step in range(t.steps_per_bar):
+        m.on_step(step, _drums())
+    notes = m.finish(t.duration_s)
+    kicks = sorted(n.step // t.steps_per_beat for n in notes if n.midi == KICK and n.source == "kick")
+    snares = sorted(n.step // t.steps_per_beat for n in notes if n.midi == SNARE)
+    assert 0 in kicks and 3 in kicks           # 3 + 2 grouping
+    assert snares == [2, 4]
+    assert len([n for n in notes if n.midi == RIDE]) == 5

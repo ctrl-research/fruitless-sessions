@@ -305,6 +305,7 @@ def run_take(tune_path: Path, out: Path, seed: int = 0, pack_dir: Path = paths.P
         "tune": {
             "name": tune.name, "tempo_bpm": tune.tempo_bpm, "grid": tune.grid, "key": tune.key,
             "step_s": tune.step_seconds, "steps_per_bar": tune.steps_per_bar,
+            "beats_per_bar": tune.beats_per_bar, "meter": f"{tune.beats_per_bar}/4",
             "total_steps": tune.total_steps, "duration_s": tune.duration_s,
             "chart": tune.chart,
             "form": [{"kind": s.kind, "who": list(s.who), "bars": s.bars} for s in tune.form],

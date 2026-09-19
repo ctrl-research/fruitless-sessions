@@ -364,3 +364,17 @@ hl) and side; about 60 to 68 neurons each. Wing MNs are the 56 wing types.
   honest scope paragraph. Not yet done: the actual first publish (the repo is
   private; GitHub Pages on a private repository needs a paid plan, and the
   alternative is the homelab cluster), and the `awesome-fly` submission.
+
+## 2026-09-19: Take Five, and meters other than 4/4
+
+- Tune files take a `meter` (`5/4`); the beat is a quarter. Chart rows carry
+  one entry per beat, the melody is in beats, and swing eighths still work.
+  Drums accent 3 + 2 in five (kick on 1 and 4, snare on 3 and 5, ride every
+  beat); the piano comps on 2 and 4 with the anticipation on the last beat.
+- Chord roots accept jazz flat spelling (`Ebm7`, `Bb7`); music21 wants `E-m7`.
+- `tunes/take-five` has the changes of "Take Five" (Desmond, 1959): the
+  Ebm7 / Bbm7 vamp with the bridge, AABA, 32 bars at 176, form head, sax
+  chorus, head, 164 s of biological time for four flies. The shipped
+  `head.abc` is an original 5/4 line over those changes, not the melody;
+  drop a lead sheet in as ABC or MIDI and re-run `fruitless take` and the sax
+  plays that instead.

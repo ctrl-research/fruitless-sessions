@@ -121,17 +121,22 @@ class DrumsMapper:
         spb = tune.steps_per_beat
         beat = (step % tune.steps_per_bar) // spb
         on_beat = step % spb == 0
+        bpb = tune.beats_per_bar
+        # accents: 4/4 kicks 1 and 3 with snare on 2 and 4; 5/4 groups 3 + 2, kick on 1 and 4,
+        # snare on 3 and 5 (the Take Five feel)
+        kick_beats = (0, 3) if bpb == 5 else (0, 2) if bpb == 4 else (0,)
+        snare_beats = (2, 4) if bpb == 5 else (1, 3) if bpb == 4 else tuple(range(1, bpb, 2))
         power, steer, hg = readout.get("power", 0.0), readout.get("steer", 0.0), readout.get("hg", 0.0)
         burst, gf = readout.get("burst", 0.0), readout.get("gf", 0.0)
         rising = power > self._power_mean * 1.05
         self._power_mean += (power - self._power_mean) * 0.15
         if on_beat and power > 20:
             self._hit(t, RIDE, 60 + power, step, "ride")
-            if rising or beat in (0, 2):
+            if rising or beat in kick_beats:
                 self._hit(t, KICK, 70 + power, step, "kick")
         if not on_beat and steer > 15:
             self._hit(t, HAT, 40 + steer, step, "hat")
-        if on_beat and beat in (1, 3) and steer > 25:
+        if on_beat and beat in snare_beats and steer > 25:
             self._hit(t, SNARE, 60 + steer, step, "snare")
         elif burst > 0.9 and steer > 15:
             self._hit(t, SNARE, 35 + 20 * burst, step, "ghost")
@@ -170,8 +175,10 @@ class PianoMapper:
         spb = tune.steps_per_beat
         beat = (step % tune.steps_per_bar) // spb
         on_beat = step % spb == 0
-        and_of_four = beat == 3 and step % spb == spb // 2 and spb > 1
-        if not ((on_beat and beat in (1, 3)) or and_of_four):
+        bpb = tune.beats_per_bar
+        comp_beats = (1, 3) if bpb == 4 else (1, 3) if bpb == 5 else tuple(range(1, bpb, 2))
+        and_of_four = beat == bpb - 1 and step % spb == spb // 2 and spb > 1
+        if not ((on_beat and beat in comp_beats) or and_of_four):
             return
         chord = tune.chord_at(step)
         if chord is None:

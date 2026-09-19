@@ -1,0 +1,52 @@
+name: take-five
+tempo_bpm: 176
+grid: swing8
+meter: 5/4
+key: e-              # E-flat minor (music21 spelling)
+form: [head, solo:sax, head]
+# Chord changes of "Take Five" (Paul Desmond, 1959): a two-chord vamp with a bridge, AABA.
+# Bars are five beats; a chord on beat 1 holds until the next symbol.
+chart:
+  - [Ebm7, "", "", Bbm7, ""]
+  - [Ebm7, "", "", Bbm7, ""]
+  - [Ebm7, "", "", Bbm7, ""]
+  - [Ebm7, "", "", Bbm7, ""]
+  - [Ebm7, "", "", Bbm7, ""]
+  - [Ebm7, "", "", Bbm7, ""]
+  - [Ebm7, "", "", Bbm7, ""]
+  - [Ebm7, "", "", Bbm7, ""]
+  - [Ebm7, "", "", Bbm7, ""]
+  - [Ebm7, "", "", Bbm7, ""]
+  - [Ebm7, "", "", Bbm7, ""]
+  - [Ebm7, "", "", Bbm7, ""]
+  - [Ebm7, "", "", Bbm7, ""]
+  - [Ebm7, "", "", Bbm7, ""]
+  - [Ebm7, "", "", Bbm7, ""]
+  - [Ebm7, "", "", Bbm7, ""]
+  - [Bmaj7, "", "", Bbm7, ""]
+  - [Abm7, "", "", Gbmaj7, ""]
+  - [Bmaj7, "", "", Bbm7, ""]
+  - [Abm7, "", "", Gbmaj7, ""]
+  - [Bmaj7, "", "", Bbm7, ""]
+  - [Abm7, "", "", Gbmaj7, ""]
+  - [Fm7, "", "", Bb7, ""]
+  - [Ebm7, "", "", Bbm7, ""]
+  - [Ebm7, "", "", Bbm7, ""]
+  - [Ebm7, "", "", Bbm7, ""]
+  - [Ebm7, "", "", Bbm7, ""]
+  - [Ebm7, "", "", Bbm7, ""]
+  - [Ebm7, "", "", Bbm7, ""]
+  - [Ebm7, "", "", Bbm7, ""]
+  - [Ebm7, "", "", Bbm7, ""]
+  - [Ebm7, "", "", Bbm7, ""]
+# The melody file is what the sax plays in the head sections. head.abc as shipped is an
+# ORIGINAL 5/4 line in the tune's style, not Desmond's melody; replace it with your lead sheet
+# (ABC or MIDI, 32 bars of 5/4 starting at bar 1) and re-run `fruitless take`.
+melody: head.abc
+roles: [sax, bass, drums, piano]
+coupling:
+  sax:   {bass: 0.3, drums: 0.3, piano: 0.3}
+  bass:  {sax: 0.4, drums: 0.5, piano: 0.2}
+  drums: {sax: 0.4, bass: 0.5, piano: 0.2}
+  piano: {sax: 0.5, bass: 0.3, drums: 0.2}
+free_style: false

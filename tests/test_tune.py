@@ -43,3 +43,13 @@ def test_chord_theory():
     assert 10 in scale and 4 not in scale  # mixolydian: Eb yes, E no
     tones, _ = chord_pitch_classes("Bm7b5", "C")
     assert tones == (11, 2, 5, 9)         # B D F A
+
+
+def test_flat_roots_and_meter():
+    from pathlib import Path as _P
+    t = load_tune(_P(__file__).resolve().parents[1] / "tunes" / "take-five" / "tune.yaml")
+    assert t.beats_per_bar == 5 and t.steps_per_bar == 10 and t.chorus_bars == 32
+    tones, _ = chord_pitch_classes("Ebm7", "e-")
+    assert tones == (3, 6, 10, 1)             # Eb Gb Bb Db from the root
+    assert chord_pitch_classes("Bb7", "F")[0] == (10, 2, 5, 8)
+    assert t.chord_at(0) == "Ebm7" and t.chord_at(6) == "Bbm7"   # beat 4 of the bar
