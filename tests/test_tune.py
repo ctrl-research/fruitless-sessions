@@ -43,3 +43,21 @@ def test_chord_theory():
     assert 10 in scale and 4 not in scale  # mixolydian: Eb yes, E no
     tones, _ = chord_pitch_classes("Bm7b5", "C")
     assert tones == (11, 2, 5, 9)         # B D F A
+
+
+def test_flat_roots():
+    tones, _ = chord_pitch_classes("Ebm7", "e-")
+    assert tones == (3, 6, 10, 1)             # Eb Gb Bb Db from the root
+    assert chord_pitch_classes("Bb7", "F")[0] == (10, 2, 5, 8)
+
+
+def test_take_five_meter():
+    from pathlib import Path as _P
+
+    import pytest
+    d = _P(__file__).resolve().parents[1] / "tunes" / "take-five"
+    if not (d / "tune.mid").is_file():
+        pytest.skip("tune.mid is not in the repo")
+    t = load_tune(d / "tune.yaml")
+    assert t.beats_per_bar == 5 and t.steps_per_bar == 10
+    assert t.chord_at(5 * t.steps_per_bar) == "Ebm7"          # bar 6, the vamp

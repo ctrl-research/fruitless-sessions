@@ -304,6 +304,14 @@ Each phase ends with something you can open in a browser.
 - Data budget met, bundles chunked, site on GitHub Pages or the cluster.
 - README with honest scope, a link to the page, a reproducible seed.
   CC-BY attribution for MaleCNS. Submit to `awesome-fly`.
+- **How it is built:** soma positions, superclass codes and hero meshes live
+  once under the takes root (`shared/`, `meshes/`) and every bundle points at
+  them, so a second take of the same band costs its activity layers and
+  audio only. `scripts/publish` builds the stage and force-pushes a single
+  orphan commit to `gh-pages`; a workflow deploys that branch. The build is a
+  local step because the simulation needs Apple silicon. Every take records
+  a SHA-256 of each fly's per-neuron spike counts, so a rerun from the same
+  seed, tune, pack and engine commit can be checked without the recordings.
 
 ### Stretch
 - **Singer:** FlyWire v783 female as a sixth fly; male song to her `JO-*`, her

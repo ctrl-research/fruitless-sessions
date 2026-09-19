@@ -12,6 +12,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import numpy as np
 import yaml
 from music21 import converter, harmony
 from music21 import key as m21key
@@ -41,6 +42,10 @@ class Tune:
     melody: list[tuple[float, float, int]] = field(default_factory=list)  # (start_beat, dur_beats, midi)
     source_dir: Path | None = None
     free_chord: str | None = None     # set by the conductor in free style (from the piano's bump)
+    meter_beats: int = 4              # beats per bar (4 for 4/4, 5 for 5/4); the beat is a quarter
+    # arrangement mode: written parts per role, (start_beat, dur_beats, midi, velocity) from bar 1
+    parts: dict[str, list[tuple[float, float, int, int]]] = field(default_factory=dict)
+    arrangement: str | None = None
 
     # ------------------------------------------------------------ timing
     @property
@@ -49,7 +54,7 @@ class Tune:
 
     @property
     def beats_per_bar(self) -> int:
-        return 4
+        return self.meter_beats
 
     @property
     def steps_per_bar(self) -> int:
@@ -108,6 +113,8 @@ class Tune:
         if not self.chart:
             return self.free_chord
         bar = (step // self.steps_per_bar) % self.chorus_bars
+        if self.arrangement:
+            bar = min(step // self.steps_per_bar, self.chorus_bars - 1)
         beat = (step % self.steps_per_bar) // self.steps_per_beat
         row = self.chart[bar]
         sym = ""
@@ -128,12 +135,24 @@ class Tune:
         sec, bar_in_sec = self.section_at(step)
         if sec.kind != "head" or not self.melody:
             return None
-        beat_in_chorus = ((bar_in_sec % self.chorus_bars) * self.beats_per_bar
-                          + (step % self.steps_per_bar) / self.steps_per_beat)
+        if self.arrangement:
+            beat = step / self.steps_per_beat        # arranged melodies run from bar 1, no chorus wrap
+        else:
+            beat = ((bar_in_sec % self.chorus_bars) * self.beats_per_bar
+                    + (step % self.steps_per_bar) / self.steps_per_beat)
         for start, dur, midi in self.melody:
-            if start <= beat_in_chorus < start + dur:
+            if start <= beat < start + dur:
                 return midi
         return None
+
+    def part_onsets(self, role: str, step: int) -> list[tuple[int, int, float]]:
+        """Written notes of `role` starting within this grid step: (midi, velocity, dur_beats)."""
+        notes = self.parts.get(role)
+        if not notes:
+            return []
+        b0 = step / self.steps_per_beat
+        b1 = (step + 1) / self.steps_per_beat
+        return [(m, v, d) for (st, d, m, v) in notes if b0 <= st < b1]
 
 
 # ---------------------------------------------------------------- theory
@@ -153,7 +172,10 @@ def chord_pitch_classes(symbol: str, key_name: str) -> tuple[tuple[int, ...], tu
     k = (symbol, key_name)
     if k in _chord_cache:
         return _chord_cache[k]
-    sym = symbol.replace("maj7", "M7").replace("m7b5", "m7b5").replace("Δ", "M7")
+    sym = symbol.replace("maj7", "M7").replace("Δ", "M7")
+    # jazz spelling "Eb" -> music21 spelling "E-" for the root's flat (alterations like b5 stay)
+    if len(sym) > 1 and sym[1] == "b":
+        sym = sym[0] + "-" + sym[2:]
     cs = harmony.ChordSymbol(sym)
     root = cs.root().pitchClass
     # chord tones ordered from the root upward: root, third, fifth, seventh
@@ -213,10 +235,114 @@ def _load_melody(path: Path) -> list[tuple[float, float, int]]:
     return notes
 
 
+_NAMES = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
+_QUALITIES = {"m7": (0, 3, 7, 10), "maj7": (0, 4, 7, 11), "7": (0, 4, 7, 10)}
+# every minor seventh, major seventh and dominant at every root: enough for the standards this
+# band plays, and it copes with an arrangement that modulates
+CHORD_VOCAB = {f"{_NAMES[r]}{q}": tuple((r + i) % 12 for i in ivs)
+               for r in range(12) for q, ivs in _QUALITIES.items()}
+
+
+def _load_arrangement(path: Path, doc: dict) -> dict:
+    """Read a multi-track MIDI arrangement into parts per role, plus tempo, meter, bars and,
+    unless the file gives a chart, a chord estimate per half-bar from the bass and chords."""
+    import pretty_midi
+
+    pm = pretty_midi.PrettyMIDI(str(path))
+    tempos = pm.get_tempo_changes()[1]
+    bpm = float(doc.get("tempo_bpm") or (tempos[0] if len(tempos) else 120.0))
+    ts = pm.time_signature_changes
+    beats = int(doc.get("meter", f"{ts[0].numerator}/4" if ts else "4/4").split("/")[0])
+    beat_s = 60.0 / bpm
+    t0 = float(doc.get("grid_offset_s", 0.0))
+    n_bars = int(np.ceil((pm.get_end_time() - t0) / (beat_s * beats)))
+    by_name: dict[str, list] = {}
+    for inst in pm.instruments:
+        by_name.setdefault(inst.name, []).append(inst)
+    parts: dict[str, list[tuple[float, float, int, int]]] = {}
+    for role, names in (doc.get("parts") or {}).items():
+        notes = []
+        for name in ([names] if isinstance(names, str) else names):
+            for inst in by_name.get(name, []):
+                for n in inst.notes:
+                    notes.append(((n.start - t0) / beat_s, max(0.05, (n.end - n.start) / beat_s), int(n.pitch), int(n.velocity)))
+        parts[role] = sorted(notes)
+    # form: bars where the melody part has notes are "head"; the rest is "vamp" (everyone else
+    # still follows their written parts, the soloist rests)
+    lead = doc.get("lead", "sax")
+    dens = np.zeros(n_bars, int)
+    for st, _, _, _ in parts.get(lead, []):
+        b = int(st // beats)
+        if 0 <= b < n_bars:
+            dens[b] += 1
+    kinds = ["head" if d >= 3 else "vamp" for d in dens]
+    form: list[Section] = []
+    for k in kinds:
+        if form and form[-1].kind == k:
+            form[-1] = Section(k, form[-1].who, form[-1].bars + 1)
+        else:
+            form.append(Section(k, (lead,) if k == "head" else (), 1))
+    chart = doc.get("chart") or []
+    if not chart:
+        chart = _estimate_chart(pm, t0, beat_s, beats, n_bars, doc.get("chord_tracks") or ["ACOU BASS", "A.PIANO 2"],
+                                doc.get("bass_track", "ACOU BASS"))
+    return {"bpm": bpm, "beats": beats, "n_bars": n_bars, "parts": parts, "form": form, "chart": chart,
+            "melody": [(st, d, m) for (st, d, m, _v) in parts.get(lead, [])]}
+
+
+def _estimate_chart(pm, t0: float, beat_s: float, beats: int, n_bars: int, tracks: list[str],
+                    bass_track: str) -> list[list[str]]:
+    """Chord per half-bar (3 + 2 in five, 2 + 2 in four) by template match over pitch-class
+    time within the window, with the bass root weighted; vocabulary is the tune's own chords."""
+    from collections import Counter
+
+    insts = [i for i in pm.instruments if i.name in tracks and not i.is_drum]
+    bass = [i for i in pm.instruments if i.name == bass_track]
+    roots = {name: pcs[0] for name, pcs in CHORD_VOCAB.items()}
+
+    def window(a: float, b: float) -> str:
+        w: Counter = Counter()
+        for inst in insts:
+            for n in inst.notes:
+                if n.start < b and n.end > a:
+                    w[n.pitch % 12] += (min(n.end, b) - max(n.start, a)) * (2.0 if inst.name == bass_track else 1.0)
+        if not w:
+            return ""
+        bass_pcs: Counter = Counter(n.pitch % 12 for i in bass for n in i.notes if n.start < b and n.end > a)
+        best, score = "", -1e9
+        for name, pcs in CHORD_VOCAB.items():
+            sc = sum(w[p] for p in pcs) - 0.5 * sum(v for p, v in w.items() if p not in pcs)
+            if bass_pcs and bass_pcs.most_common(1)[0][0] == roots[name]:
+                sc *= 1.4
+            if sc > score:
+                best, score = name, sc
+        return best
+
+    split = 3 if beats == 5 else beats // 2
+    rows = []
+    for b in range(n_bars):
+        a = t0 + b * beats * beat_s
+        c1 = window(a, a + split * beat_s)
+        c2 = window(a + split * beat_s, a + beats * beat_s)
+        row = [""] * beats
+        row[0] = c1
+        row[split] = c2 if c2 != c1 else ""
+        rows.append(row)
+    return rows
+
+
 def load_tune(path: Path) -> Tune:
     path = Path(path)
     doc = yaml.safe_load(path.read_text())
     roles = list(doc.get("roles", []))
+    if doc.get("arrangement"):
+        arr = _load_arrangement(path.parent / doc["arrangement"], doc)
+        return Tune(
+            name=doc["name"], tempo_bpm=arr["bpm"], grid=doc.get("grid", "swing8"), meter_beats=arr["beats"],
+            key=doc.get("key", "C"), chart=arr["chart"], form=arr["form"], roles=roles,
+            coupling=doc.get("coupling", {}), free_style=False, melody=arr["melody"], source_dir=path.parent,
+            parts=arr["parts"], arrangement=doc["arrangement"],
+        )
     chart_raw = doc.get("chart") or []
     chart = [[str(c) if c else "" for c in bar] for bar in chart_raw]
     form = _parse_form(doc.get("form", ["head"]), roles)
@@ -229,8 +355,13 @@ def load_tune(path: Path) -> Tune:
             bars = s.bars * chorus
         filled.append(Section(s.kind, s.who, bars, s.trade_bars))
     melody = _load_melody(path.parent / doc["melody"]) if doc.get("melody") else []
+    meter = str(doc.get("meter", "4/4"))
+    beats = int(meter.split("/")[0])
+    if meter.split("/")[1] != "4":
+        raise ValueError(f"meter {meter}: only quarter-note beats are supported")
     return Tune(
         name=doc["name"], tempo_bpm=float(doc.get("tempo_bpm", 120)), grid=doc.get("grid", "swing8"),
+        meter_beats=beats,
         key=doc.get("key", "C"), chart=chart, form=filled, roles=roles,
         coupling=doc.get("coupling", {}), free_style=bool(doc.get("free_style", False)),
         melody=melody, source_dir=path.parent,

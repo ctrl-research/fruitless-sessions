@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Build the stage with every bundled take and push it to the `gh-pages` branch as a single
+# orphan commit, so the branch never accumulates history (bundles are ~100 MB each).
+#
+#   scripts/publish                 # base path /fruitless-sessions/ (GitHub project pages)
+#   VITE_BASE=/ scripts/publish     # for a root domain
+#
+# Simulation runs only on Apple silicon, so publishing is a local step: the takes under
+# stage/public/takes are whatever `fruitless take`, `bundle` and `meshes` produced here.
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT/stage"
+[ -f public/takes/index.json ] || { echo "no takes bundled: run fruitless bundle first" >&2; exit 2; }
+npm run build >/dev/null
+SIZE=$(du -sh dist | cut -f1)
+echo "built dist ($SIZE)"
+TMP="$(mktemp -d)"
+git -C "$ROOT" worktree add --detach "$TMP" >/dev/null 2>&1
+( cd "$TMP"
+  git checkout --orphan gh-pages >/dev/null 2>&1
+  git rm -rfq . >/dev/null 2>&1 || true
+  cp -R "$ROOT/stage/dist/." .
+  touch .nojekyll
+  git add -A
+  git -c user.name="fruitless publish" -c user.email="noreply@ctrl-research" commit -qm "publish $(date -u +%Y-%m-%dT%H:%MZ) from $(git -C "$ROOT" rev-parse --short HEAD)"
+  git push -f origin gh-pages
+)
+git -C "$ROOT" worktree remove --force "$TMP"
+echo "pushed gh-pages ($SIZE). Enable Pages on the repo (branch gh-pages, root) if not already."

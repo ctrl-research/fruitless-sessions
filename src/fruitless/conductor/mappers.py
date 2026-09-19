@@ -65,6 +65,18 @@ class BassMapper:
     def on_step(self, step: int, readout: dict[str, float]) -> None:
         tune = self.tune
         t = step * tune.step_seconds + tune.swing_offset_s(step)
+        if "bass" in tune.parts:
+            # arranged: the written bass line decides pitch and timing; the legs decide whether a
+            # note sounds (mean leg MN rate above a floor) and how hard
+            load = readout.get("load", 0.0)
+            for midi, vel, dur in tune.part_onsets("bass", step):
+                if load < 6.0:
+                    continue
+                self._close(t)
+                v = int(np.clip(vel * (0.55 + 0.45 * min(1.0, load / 40.0)), 40, 120))
+                self._open = Note(t, dur * 60.0 / tune.tempo_bpm, midi, v, step, self.role, "written")
+                self._close(t + dur * 60.0 / tune.tempo_bpm)
+            return
         chord = tune.chord_at(step)
         l, r = readout.get("step_l", 0.0), readout.get("step_r", 0.0)
         onset_l = l >= 0.5 and self._prev_l < 0.5
@@ -118,20 +130,38 @@ class DrumsMapper:
     def on_step(self, step: int, readout: dict[str, float]) -> None:
         tune = self.tune
         t = step * tune.step_seconds + tune.swing_offset_s(step)
+        if "drums" in tune.parts:
+            # arranged: written hits; each voice is gated by the muscle group that would drive it
+            power, steer, hg = readout.get("power", 0.0), readout.get("steer", 0.0), readout.get("hg", 0.0)
+            for midi, vel, _dur in tune.part_onsets("drums", step):
+                if midi in (35, 36, 51, 59, 49, 57, 52, 55):
+                    gate, rate = power > 8.0, power
+                elif midi in (38, 40, 37, 42, 44, 46):
+                    gate, rate = steer > 6.0, steer
+                else:
+                    gate, rate = (hg + steer) > 6.0, hg + steer
+                if gate:
+                    self._hit(t, midi, int(vel * (0.6 + 0.4 * min(1.0, rate / 40.0))), step, "written")
+            return
         spb = tune.steps_per_beat
         beat = (step % tune.steps_per_bar) // spb
         on_beat = step % spb == 0
+        bpb = tune.beats_per_bar
+        # accents: 4/4 kicks 1 and 3 with snare on 2 and 4; 5/4 groups 3 + 2, kick on 1 and 4,
+        # snare on 3 and 5 (the Take Five feel)
+        kick_beats = (0, 3) if bpb == 5 else (0, 2) if bpb == 4 else (0,)
+        snare_beats = (2, 4) if bpb == 5 else (1, 3) if bpb == 4 else tuple(range(1, bpb, 2))
         power, steer, hg = readout.get("power", 0.0), readout.get("steer", 0.0), readout.get("hg", 0.0)
         burst, gf = readout.get("burst", 0.0), readout.get("gf", 0.0)
         rising = power > self._power_mean * 1.05
         self._power_mean += (power - self._power_mean) * 0.15
         if on_beat and power > 20:
             self._hit(t, RIDE, 60 + power, step, "ride")
-            if rising or beat in (0, 2):
+            if rising or beat in kick_beats:
                 self._hit(t, KICK, 70 + power, step, "kick")
         if not on_beat and steer > 15:
             self._hit(t, HAT, 40 + steer, step, "hat")
-        if on_beat and beat in (1, 3) and steer > 25:
+        if on_beat and beat in snare_beats and steer > 25:
             self._hit(t, SNARE, 60 + steer, step, "snare")
         elif burst > 0.9 and steer > 15:
             self._hit(t, SNARE, 35 + 20 * burst, step, "ghost")
@@ -167,11 +197,34 @@ class PianoMapper:
 
     def on_step(self, step: int, readout: dict[str, float]) -> None:
         tune = self.tune
+        if "piano" in tune.parts:
+            # arranged: written chords; the ring decides whether they sound (EPG rate), how full
+            # (bump sharpness keeps or thins the inner voices) and how hard (EPG rate x MB gain)
+            epg = readout.get("epg_hz", 0.0)
+            if epg < 1.0:
+                return
+            mag = readout.get("bump_mag", 0.0)
+            gain = readout.get("mb_gain", 1.0)
+            onsets = tune.part_onsets("piano", step)
+            if not onsets:
+                return
+            t = step * tune.step_seconds + tune.swing_offset_s(step)
+            pitches = sorted({m for m, _v, _d in onsets})
+            if mag < 0.6 and len(pitches) > 2:
+                pitches = [pitches[0], pitches[-1]]        # shell: keep the outer voices
+            vel_written = int(np.mean([v for _m, v, _d in onsets]))
+            vel = int(np.clip(vel_written * (0.6 + 0.4 * min(1.0, epg / 40.0)) * gain, 30, 120))
+            dur = max(d for _m, _v, d in onsets) * 60.0 / tune.tempo_bpm
+            for m in pitches:
+                self.notes.append(Note(t, dur, m, vel, step, self.role, "written"))
+            return
         spb = tune.steps_per_beat
         beat = (step % tune.steps_per_bar) // spb
         on_beat = step % spb == 0
-        and_of_four = beat == 3 and step % spb == spb // 2 and spb > 1
-        if not ((on_beat and beat in (1, 3)) or and_of_four):
+        bpb = tune.beats_per_bar
+        comp_beats = (1, 3) if bpb == 4 else (1, 3) if bpb == 5 else tuple(range(1, bpb, 2))
+        and_of_four = beat == bpb - 1 and step % spb == spb // 2 and spb > 1
+        if not ((on_beat and beat in comp_beats) or and_of_four):
             return
         chord = tune.chord_at(step)
         if chord is None:

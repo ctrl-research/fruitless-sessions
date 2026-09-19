@@ -66,15 +66,21 @@ class FlySpec:
 
 
 def write_shared(bundle: Path, pack) -> dict:
-    shared = bundle / "shared"
+    """Soma positions and superclass codes are the same for every take, so they live once in
+    `<takes root>/shared/` and bundles point at them with a `../shared/` path."""
+    shared = bundle.parent / "shared"
     shared.mkdir(parents=True, exist_ok=True)
-    xyz = soma_xyz_by_index(pack.neuron_ids)
-    (shared / "soma-xyz.bin").write_bytes(xyz.astype("<f4").tobytes())
+    xyz_path, sc_path = shared / "soma-xyz.bin", shared / "superclass.bin"
     codes, legend = superclass_by_index(pack.neuron_ids)
-    (shared / "superclass.bin").write_bytes(codes.tobytes())
+    if not xyz_path.is_file():
+        xyz = soma_xyz_by_index(pack.neuron_ids)
+        xyz_path.write_bytes(xyz.astype("<f4").tobytes())
+    if not sc_path.is_file():
+        sc_path.write_bytes(codes.tobytes())
+    xyz = np.frombuffer(xyz_path.read_bytes(), dtype="<f4").reshape(-1, 3)
     return {
-        "soma_xyz": "shared/soma-xyz.bin",
-        "superclass": "shared/superclass.bin",
+        "soma_xyz": "../shared/soma-xyz.bin",
+        "superclass": "../shared/superclass.bin",
         "superclass_legend": legend,
         "n_neurons": int(pack.n_neurons),
         "with_soma": int(np.isfinite(xyz[:, 0]).sum()),
@@ -125,7 +131,7 @@ def write_bundle(bundle: Path, name: str, pack, flies: list[FlySpec], duration_s
     }
     # keep a meshes entry from an earlier `fruitless meshes` run on this bundle
     old = bundle / "take.json"
-    if old.is_file() and (bundle / "meshes" / "index.json").is_file():
+    if old.is_file() and (bundle / "meshes.json").is_file():
         prev = json.loads(old.read_text())
         if "meshes" in prev:
             manifest["meshes"] = prev["meshes"]
@@ -146,7 +152,6 @@ def write_index(stage_takes: Path) -> list[dict]:
         entries.append({
             "name": m["name"], "path": d.name, "duration_s": m.get("duration_s", 0),
             "roles": [f["role"] for f in m.get("flies", [])],
-            "iterations": m.get("iterations", 1),
             "tune": (m.get("tune") or {}).get("name"),
             "audio": bool(m.get("audio")),
         })

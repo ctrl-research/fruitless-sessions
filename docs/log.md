@@ -343,3 +343,66 @@ hl) and side; about 60 to 68 neurons each. Wing MNs are the 56 wing types.
 - Mesh budget is now the concern: four flies are 765 hero neurons and 57 MB
   even after decimation; the blues bundle is 118 MB. Sharing meshes between
   bundles or dropping the ear groups from the hero layers is the next lever.
+
+## 2026-09-19: phase 6, publishing
+
+- Shared assets. Soma positions and superclass codes moved to
+  `stage/public/takes/shared/` and hero meshes to a single store at
+  `stage/public/takes/meshes/` with a `store.json`; each bundle keeps its own
+  `meshes.json` listing the subset it draws and points at the store with
+  `../meshes/<idx>.fsm`. The store prunes neurons no bundle references. The
+  takes root went from 221 MB to 156 MB with three takes; a second four-fly
+  take now costs 37 MB (activity layers and audio) instead of 93.
+- `scripts/publish` builds the stage under the `/fruitless-sessions/` base
+  path and force-pushes one orphan commit to `gh-pages`, so the branch never
+  grows. `.github/workflows/pages.yml` deploys that branch. Publishing is a
+  local step because the build needs the takes and those need Metal.
+- Reproducibility: every take records `counts_sha256`, a digest of each fly's
+  per-neuron spike counts. Same seed, tune, pack and engine give the same
+  digest; earlier phases already showed identical spike totals across reruns.
+- README has the stage screenshot, the publish and reproduce sections and the
+  honest scope paragraph. Not yet done: the actual first publish (the repo is
+  private; GitHub Pages on a private repository needs a paid plan, and the
+  alternative is the homelab cluster), and the `awesome-fly` submission.
+
+## 2026-09-19: Take Five, and meters other than 4/4
+
+- Tune files take a `meter` (`5/4`); the beat is a quarter. Chart rows carry
+  one entry per beat, the melody is in beats, and swing eighths still work.
+  Drums accent 3 + 2 in five (kick on 1 and 4, snare on 3 and 5, ride every
+  beat); the piano comps on 2 and 4 with the anticipation on the last beat.
+- Chord roots accept jazz flat spelling (`Ebm7`, `Bb7`); music21 wants `E-m7`.
+- `tunes/take-five` has the changes of "Take Five" (Desmond, 1959): the
+  Ebm7 / Bbm7 vamp with the bridge, AABA, 32 bars at 176, form head, sax
+  chorus, head, 164 s of biological time for four flies. The shipped
+  `head.abc` is an original 5/4 line over those changes, not the melody;
+  drop a lead sheet in as ABC or MIDI and re-run `fruitless take` and the sax
+  plays that instead.
+
+## 2026-09-19: arrangement mode, and the flies learn a MIDI
+
+- A tune can point at a MIDI arrangement instead of a chart and melody
+  (`arrangement:`, `parts:` mapping roles to track names, `lead:`). Tempo,
+  meter and bar count come from the file; the form is read off the lead
+  part (bars where it plays are `head`, the rest `vamp`); the chart is
+  estimated per half-bar by template match against every m7, maj7 and 7 at
+  every root, with the bass root weighted. The estimate caught a half-step
+  modulation into E minor for the head out that a fixed vocabulary had
+  misread as B major and Bb7.
+- Written-part mappers: the part decides pitch and timing, the fly decides
+  whether the note sounds and how hard. Bass notes need mean leg MN rate
+  above 6 Hz; drum hits are gated by the muscle group that would play them
+  (kick, ride and crash by power MNs, snare and hats by steering MNs, toms by
+  hg); piano chords need EPG rate above 1 Hz and thin to their outer voices
+  when the bump is diffuse, velocity from EPG rate times mushroom body gain.
+  The sax follows the lead part as it already followed a melody.
+- The arrangement file itself stays out of the repo (`tunes/**/*.mid` is
+  ignored): it is the user's copy of a published arrangement.
+- Grid steps are now rounded to 0.1 ms ticks, not milliseconds; at 178 BPM
+  the old rounding would have drifted the music against the brains by about
+  0.6 s over the take.
+
+- Dropped the run count from the take dropdown. It counted how many times
+  `take` or `remap` had been run while building and read as if the flies had
+  trained. Nothing here trains: a take is one deterministic pass. The
+  `iterations` field stays in `take.json` as plain bookkeeping.

@@ -1,0 +1,24 @@
+name: take-five
+grid: swing8
+key: e-              # E-flat minor (music21 spelling)
+# Arrangement mode: tempo, meter, bar count, form and every part come from a MIDI you supply.
+# tune.mid is not committed (see .gitignore): it is a published arrangement of "Take Five"
+# (Paul Desmond, 1959). Each fly follows its written part where the part has notes; the fly
+# decides whether each note sounds, how hard, how short, and whether it pushes or lays back.
+# Bars where the lead part is silent are "vamp": the rhythm section keeps following its parts.
+arrangement: tune.mid
+lead: sax
+parts:
+  sax: ALT SAX
+  bass: ACOU BASS
+  piano: A.PIANO 2
+  drums: [DRUMS]
+chord_tracks: [ACOU BASS, A.PIANO 2, JAZZ GTR]
+bass_track: ACOU BASS
+roles: [sax, bass, drums, piano]
+coupling:
+  sax:   {bass: 0.3, drums: 0.3, piano: 0.3}
+  bass:  {sax: 0.4, drums: 0.5, piano: 0.2}
+  drums: {sax: 0.4, bass: 0.5, piano: 0.2}
+  piano: {sax: 0.5, bass: 0.3, drums: 0.2}
+free_style: false

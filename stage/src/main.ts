@@ -15,14 +15,14 @@ const params = new URLSearchParams(location.search)
 const takeName = params.get('take') ?? 'smoke'
 const base = `${import.meta.env.BASE_URL}takes/${takeName}`
 
-interface TakeIndexEntry { name: string; path: string; duration_s: number; roles: string[]; iterations: number; audio: boolean }
+interface TakeIndexEntry { name: string; path: string; duration_s: number; roles: string[]; audio: boolean }
 
 async function setupControls() {
   const sel = document.getElementById('take-select') as HTMLSelectElement
   try {
     const index: TakeIndexEntry[] = await (await fetch(`${import.meta.env.BASE_URL}takes/index.json`)).json()
     sel.innerHTML = index.map(e =>
-      `<option value="${e.path}" ${e.path === takeName ? 'selected' : ''}>${e.name} · ${e.roles.join(', ')} (${e.iterations} take${e.iterations === 1 ? '' : 's'})</option>`).join('')
+      `<option value="${e.path}" ${e.path === takeName ? 'selected' : ''}>${e.name} · ${e.roles.join(', ')} · ${Math.round(e.duration_s)} s</option>`).join('')
     sel.onchange = () => { location.search = `?take=${encodeURIComponent(sel.value)}` }
   } catch { sel.innerHTML = `<option>${takeName}</option>` }
   const stats = document.getElementById('toggle-stats') as HTMLInputElement
@@ -298,6 +298,17 @@ async function main() {
   const nowEl = document.getElementById('now')!
   if (!score) strip.style.display = 'none'
   else strip.style.height = `${16 + 22 * Math.max(1, Object.keys(notesByRole).length)}px`
+  // drag along the strip to scrub; a click seeks, playback state is kept
+  let scrubbing = false
+  const seekFromPointer = (e: PointerEvent) => {
+    const r = strip.getBoundingClientRect()
+    transport.seek(Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * duration)
+  }
+  strip.style.cursor = 'ew-resize'
+  strip.addEventListener('pointerdown', e => { scrubbing = true; strip.setPointerCapture(e.pointerId); seekFromPointer(e) })
+  strip.addEventListener('pointermove', e => { if (scrubbing) seekFromPointer(e) })
+  strip.addEventListener('pointerup', e => { scrubbing = false; strip.releasePointerCapture(e.pointerId) })
+  strip.addEventListener('pointercancel', () => { scrubbing = false })
   showPanels(performers[focus])
 
   transport.addSeekListener(() => {
@@ -392,7 +403,7 @@ async function main() {
       const sounding = performers.flatMap(pf => pf.notes.filter(n => n.t <= tNow && tNow < n.t + n.dur).map(n => `${pf.entry.role[0]}:${noteName(n.midi)}`))
       const freeKeys = (take.manifest as unknown as { free_keys?: (string | null)[] }).free_keys
       const chordLabel = score.chordAt(tNow) || (freeKeys ? (freeKeys[score.barAt(tNow)] ?? 'finding the key…') + ' (from the ring)' : '–')
-      nowEl.textContent = `bar ${score.barAt(tNow) + 1} · ${chordLabel} · ${sec ? sec.kind + (sec.who.length && sec.kind !== 'free' ? ' ' + sec.who.join('/') : '') : ''}` +
+      nowEl.textContent = `bar ${score.barAt(tNow) + 1}${tuneInfo?.meter && tuneInfo.meter !== '4/4' ? ' (' + tuneInfo.meter + ')' : ''} · ${chordLabel} · ${sec ? sec.kind + (sec.who.length && sec.kind !== 'free' ? ' ' + sec.who.join('/') : '') : ''}` +
         (sounding.length ? ` · ♪ ${sounding.slice(0, 6).join(' ')}` : '')
     }
     // camera pans (not pivots) toward the soloist until the user takes over

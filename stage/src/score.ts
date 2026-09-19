@@ -7,6 +7,8 @@ export interface TuneInfo {
   key: string
   step_s: number
   steps_per_bar: number
+  beats_per_bar?: number
+  meter?: string
   total_steps: number
   duration_s: number
   chart: string[][]
@@ -42,7 +44,7 @@ export class Score {
     const chart = this.tune.chart
     if (!chart.length) return ''
     const bar = this.barAt(t) % chart.length
-    const beatS = this.barS / 4
+    const beatS = this.barS / (this.tune.beats_per_bar ?? 4)
     const beat = Math.floor((t - this.barAt(t) * this.barS) / beatS)
     const row = chart[bar]
     for (let b = Math.min(beat, row.length - 1); b >= 0; b--) if (row[b]) return row[b]
@@ -70,7 +72,7 @@ export class Score {
     const laneH = roles.length ? (h - headerH) / roles.length : 0
     // sections
     let bar = 0
-    const colors: Record<string, string> = { head: '#2a2438', solo: '#1f2f3a', trade: '#3a2a1f', free: '#1f3a2a' }
+    const colors: Record<string, string> = { head: '#2a2438', solo: '#1f2f3a', trade: '#3a2a1f', free: '#1f3a2a', vamp: '#26262e' }
     for (const s of this.tune.form) {
       const x0 = x(bar * this.barS), x1 = x((bar + s.bars) * this.barS)
       ctx.fillStyle = colors[s.kind] ?? '#222'

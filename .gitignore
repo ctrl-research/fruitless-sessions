@@ -72,3 +72,9 @@ stage/public/takes/
 stage/assets/
 .ruff_cache/
 .pytest_cache/
+
+# arrangements you bring are yours, not the repo's
+tunes/**/*.mid
+tunes/**/*.midi
+tunes/**/*.xml
+tunes/**/*.musicxml
