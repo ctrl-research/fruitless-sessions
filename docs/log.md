@@ -406,3 +406,16 @@ hl) and side; about 60 to 68 neurons each. Wing MNs are the 56 wing types.
   `take` or `remap` had been run while building and read as if the flies had
   trained. Nothing here trains: a take is one deterministic pass. The
   `iterations` field stays in `take.json` as plain bookkeeping.
+
+## 2026-09-19: first publish
+
+- Live at https://fruitless-sessions.j6n.dev/ (GitHub Pages, workflow
+  deploy, custom domain), 355 MB with four takes: the blues, the free-style
+  session, Take Five from the supplied arrangement, and the phase 0 smoke.
+- Three things bit on the way. A push-triggered workflow only runs if the
+  pushed branch contains it, so the publish script now copies `pages.yml`
+  into the orphan commit. The second publish failed silently because the
+  local `gh-pages` branch from the first run still existed; the script now
+  builds on a throwaway orphan branch and pushes it to `gh-pages` by ref.
+  And the `github-pages` environment only allowed the default branch to
+  deploy; the environment's branch policy now lists `gh-pages` and `main`.
