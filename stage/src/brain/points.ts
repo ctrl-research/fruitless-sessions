@@ -48,7 +48,7 @@ export class BrainPoints {
     for (let i = 0; i < this.n; i++) {
       const name = superclass[i] === 255 ? '' : legend[superclass[i]]
       const hue = SUPERCLASS_HUE[name] ?? 0.0
-      c.setHSL(hue, 0.5, 0.032)   // resting dots are dim; overlap in the optic lobes still adds up, but far less
+      c.setHSL(hue, 0.45, 0.16)   // resting tint; with normal blending this is as bright as rest ever gets
       this.base[3 * i] = c.r; this.base[3 * i + 1] = c.g; this.base[3 * i + 2] = c.b
     }
     this.color = new Float32Array(this.base)
@@ -62,8 +62,10 @@ export class BrainPoints {
     geom.boundingSphere = new THREE.Sphere(this.center.clone(), this.radius)
 
     const mat = new THREE.PointsMaterial({
-      size: 0.34, vertexColors: true, sizeAttenuation: true, transparent: true, opacity: 0.85,   // smaller dots: less additive pile-up at rest
-      depthWrite: false, blending: THREE.AdditiveBlending,
+      // normal blending: overlapping resting dots no longer add up to white in the dense optic
+      // lobes, so the haze stays a haze and a spiking dot is the brightest thing in the brain
+      size: 0.4, vertexColors: true, sizeAttenuation: true, transparent: true, opacity: 0.55,
+      depthWrite: false, blending: THREE.NormalBlending,
     })
     this.object = new THREE.Points(geom, mat)
   }
