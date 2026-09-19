@@ -1,0 +1,36 @@
+[project]
+name = "fruitless"
+version = "0.1.0"
+description = "Fruitless Sessions: simulated Drosophila nervous systems from the MaleCNS v1.0 connectome, playing as a jazz ensemble"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "jonathan ng" }]
+requires-python = ">=3.12"
+dependencies = [
+  "mlx>=0.32.0",
+  "numpy>=2.0",
+  "pyarrow>=18",
+  # Kisame76's MLX leaky integrate-and-fire engine (import package `lif`).
+  # Pinned to a commit; bump deliberately, since pack format and tick
+  # semantics live there.
+  "mlx-lif-engine @ git+https://github.com/Kisame76/mlx-lif-engine.git@02657cf6fa035b9254e00ff52013f54a34489e00",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+
+[project.scripts]
+fruitless = "fruitless.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.11.28,<0.12.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra -q"
+markers = ["sim: runs the Metal engine on the full MaleCNS pack (Apple silicon, minutes)"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
