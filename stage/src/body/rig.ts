@@ -84,6 +84,76 @@ export const saxRig: Rig = {
 }
 ;(saxRig as unknown as { until: number }).until = 0
 
+export const bassRig: Rig = {
+  role: 'bass',
+  rules: [
+    { joint: 'legs', from: 'fl_L .. hl_R', rule: 'each leg lifts and swings with its own leg MN rate; the tripod that fires steps, the other stands' },
+    { joint: 'forelegs', from: 'step_l / step_r', rule: 'a footfall plucks: the near foreleg snaps on each tripod onset' },
+    { joint: 'body height', from: 'load', rule: 'bobs with mean leg MN rate' },
+    { joint: 'antennae', from: 'jo_a + jo_b', rule: 'twitch with auditory afferent rate' },
+    { joint: 'whole body', from: 'giant_fiber', rule: 'startle hop with both wings out when DNp01 fires' },
+  ],
+  pose(inp, prev, dt) {
+    const p = idlePose()
+    const k = 1 - Math.exp(-dt * 14)
+    const legs = ['fl_L', 'fl_R', 'ml_L', 'ml_R', 'hl_L', 'hl_R']
+    // pose.legs order is [L0 L1 L2 R0 R1 R2] = fl_L ml_L hl_L fl_R ml_R hl_R
+    const order = [0, 2, 4, 1, 3, 5]
+    for (let i = 0; i < 6; i++) {
+      const rate = inp.readout[legs[order[i]]] ?? 0
+      const lift = clamp(rate / 40, 0, 1)
+      const target: [number, number, number] = [
+        idlePose().legs[i][0] + 0.35 * lift * (i % 3 === 0 ? 1 : i % 3 === 2 ? -1 : 0),
+        0.35 + 0.55 * lift,
+        -1.2 + 0.5 * lift,
+      ]
+      p.legs[i] = [lerp(prev.legs[i][0], target[0], k), lerp(prev.legs[i][1], target[1], k), lerp(prev.legs[i][2], target[2], k)]
+    }
+    if (inp.noteOn) {
+      const pluck = Math.exp(-inp.noteAge * 10)
+      p.legs[0][2] -= 0.4 * pluck   // left foreleg on the strings
+    }
+    const load = inp.readout['load'] ?? 0
+    p.bodyHeight = lerp(prev.bodyHeight, 0.08 * Math.sin(inp.t * 2 * Math.PI * 2) * clamp(load / 30, 0, 1), k)
+    p.bodyPitch = 0.1
+    common(inp, p, this as unknown as { until: number })
+    return p
+  },
+}
+;(bassRig as unknown as { until: number }).until = 0
+
+export const drumsRig: Rig = {
+  role: 'drums',
+  rules: [
+    { joint: 'both wings', from: 'power', rule: 'beat amplitude from power muscle MN rate (DLM, DVM); the kit is hit on the downstroke' },
+    { joint: 'wing tempo', from: 'burst', rule: 'jerkier, faster strokes when spikes bunch into bursts (fills)' },
+    { joint: 'body pitch', from: 'steer', rule: 'leans into the snare with steering muscle MN rate' },
+    { joint: 'hind legs', from: 'notes', rule: 'stamp the kick pedal on kick hits' },
+    { joint: 'antennae', from: 'jo_a + jo_b', rule: 'twitch with auditory afferent rate' },
+    { joint: 'whole body', from: 'giant_fiber', rule: 'startle hop and crash when DNp01 fires' },
+  ],
+  pose(inp, prev, dt) {
+    const p = idlePose()
+    const k = 1 - Math.exp(-dt * 10)
+    const power = inp.readout['power'] ?? 0
+    const steer = inp.readout['steer'] ?? 0
+    const burst = inp.readout['burst'] ?? 0
+    const amp = clamp(power / 60, 0, 1)
+    p.wingExtend = [lerp(prev.wingExtend[0], 0.9, k), lerp(prev.wingExtend[1], 0.9, k)]
+    p.wingFlap = lerp(prev.wingFlap, 0.15 + 0.5 * amp, k)
+    p.wingHz = burst > 0.9 ? 9 : 5   // slowed far below biology so the strokes read as hits
+    p.bodyPitch = lerp(prev.bodyPitch, 0.05 + clamp(steer / 60, 0, 1) * 0.2, k)
+    p.legs[0] = [0.7, 0.1, -1.0]; p.legs[3] = [0.7, 0.1, -1.0]   // forelegs up, sticks
+    if (inp.noteOn) {
+      const stamp = Math.exp(-inp.noteAge * 12)
+      p.legs[5][1] += 0.4 * stamp   // right hind leg on the pedal
+    }
+    common(inp, p, this as unknown as { until: number })
+    return p
+  },
+}
+;(drumsRig as unknown as { until: number }).until = 0
+
 export const idleRig: Rig = {
   role: 'idle',
   rules: [{ joint: 'all', from: 'nothing', rule: 'standing; breathing only' }],
@@ -92,5 +162,5 @@ export const idleRig: Rig = {
 ;(idleRig as unknown as { until: number }).until = 0
 
 export function rigFor(role: string): Rig {
-  return role === 'sax' ? saxRig : idleRig
+  return role === 'sax' ? saxRig : role === 'bass' ? bassRig : role === 'drums' ? drumsRig : idleRig
 }

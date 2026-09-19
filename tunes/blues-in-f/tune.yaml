@@ -17,6 +17,9 @@ chart:
   - [F7, "", "", ""]
   - [C7, "", "", ""]
 melody: head.abc
-roles: [sax]
-coupling: {}
+roles: [sax, bass, drums]
+coupling:          # who hears whom, gain 0..1 (keep modest: loud input startles the giant fiber)
+  sax:   {bass: 0.3, drums: 0.3}
+  bass:  {sax: 0.4, drums: 0.5}
+  drums: {sax: 0.4, bass: 0.5}
 free_style: false

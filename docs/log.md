@@ -179,3 +179,93 @@ Wing MNs here are the 56 neurons of the explicit wing motor types (`DLMn *`,
   instead of freezing at zero.
 - Debt: the body is a stylised approximation and its proportions want an
   artist's pass; only the sax has a rig, the other roles use the idle rig.
+
+## 2026-09-19: what moves the legs? (phase 4 probe)
+
+One biological second per condition, seed 0, rates averaged over each group.
+Leg MN groups are the explicit leg motor types split by `subclass` (fl, ml,
+hl) and side; about 60 to 68 neurons each. Wing MNs are the 56 wing types.
+
+| drive | fl_L | fl_R | ml_L | ml_R | hl_L | hl_R | wing | fired |
+|---|---|---|---|---|---|---|---|---|
+| DNp09 100 Hz (forward walking DN) | 0.6 | 0.4 | 2.5 | 2.3 | 1.6 | 3.4 | 40 | 4,048 |
+| DNa02 100 Hz (steering DN) | 1.7 | 0.7 | 2.3 | 1.4 | 1.9 | 3.6 | 40 | 4,356 |
+| MDN 100 Hz (backward walking) | 1.6 | 0.9 | 4.3 | 3.1 | 3.5 | 5.0 | 42 | 3,951 |
+| DNp09 200 Hz | 1.0 | 0.5 | 4.4 | 4.9 | 2.4 | 5.8 | 42 | 3,711 |
+| DNg11, DNp20 100 Hz | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 5 |
+| leg sensory, ProLN_L 100 Hz (331 afferents) | 3.2 | 1.2 | 1.2 | 1.2 | 1.2 | 1.2 | 10 | 4,008 |
+| leg sensory, MesoLN_L 100 Hz | 3.9 | 2.4 | 8.0 | 4.1 | 3.9 | 3.5 | 41 | 12,045 |
+| **excitatory premotor pool of fl_L, 60 Hz (60 neurons)** | **36.6** | 13.5 | 7.3 | 2.8 | 4.7 | 3.4 | 45 | 4,565 |
+| same at 120 Hz | 55.9 | 14.9 | 8.5 | 2.8 | 5.9 | 2.9 | 47 | 4,990 |
+| excitatory premotor pool of hl_R, 60 Hz | 0.4 | 1.9 | 0.6 | 2.4 | 5.8 | **41.1** | 0.7 | 751 |
+| **tripod pools fl_L + ml_R + hl_L, 60 Hz** | **35.7** | 11.3 | 6.2 | **33.3** | **36.1** | 10.0 | 49 | 5,161 |
+
+- Descending walking commands do not walk in this model. The strongest
+  inputs to a leg's motor neurons are inhibitory premotor interneurons
+  (IN19A, IN21A, IN13A, IN16B lineages, all negative), so a pure LIF with no
+  central pattern generator or proprioceptive loop leaves leg MNs near
+  silent. DNg11 and DNp20 have no signed outgoing edges at all (unclear
+  transmitter) and do nothing.
+- Every descending drive recruits wing MNs at about 40 Hz. Wings are the
+  cheap motor output of this connectome.
+- A leg's excitatory premotor pool, the top 60 positively weighted
+  presynaptic partners of that leg's MNs excluding other MNs (types like
+  IN03A, IN04B, IN20A.22A, IN21A012, ascending ANXXX006, a few DNge), fires
+  that leg's MNs selectively at 37 Hz with 3 to 14 Hz elsewhere. Driving the
+  tripod set fires the three tripod legs at 33 to 36 Hz against 6 to 11 Hz
+  for the other three. That is the bass fly's drive.
+- Consequence for honesty: the bass line's gait timing is the conductor's,
+  because the connectome as modelled does not generate a gait. The fly
+  contributes which motor neurons fire, how strongly, and the crosstalk
+  between legs. The page will say exactly that.
+- Left and right wing MN rates were symmetric under every drive, including
+  unilateral DNa02. Drum voices will be split by muscle type (power vs
+  steering), not by side.
+
+## 2026-09-19: phase 4, the rhythm section
+
+- Three flies on the same 72 s blues (sax, bass, drums), full brains each,
+  coupled through their ears by the tune's coupling matrix. The head is played
+  into every fly's ears in head sections; between steps each fly hears the
+  others' motor intensity, split by register (sax high, drums middle, bass low).
+
+  | measure | value |
+  |---|---|
+  | wall time | 330 s (4.6 s per biological second for three brains) |
+  | total spikes | 18,259,630 |
+  | notes | sax 132, bass 144, drums 258 |
+  | activity layers | sax 19 MB, bass 24 MB, drums 9 MB |
+  | hero meshes, 522 neurons, LOD 3 decimated to 35 % | 39 MB |
+  | bundle | 93 MB |
+
+- Bass (`fruitless.flies.bass`): the conductor drives the tripod premotor
+  pools in alternation on the beat (60 Hz on the stepping tripod's pools for
+  the first half of its beat, 4 Hz otherwise). Readout is six leg MN rates,
+  two tripod step flags and mean load. A footfall onset is a note: left tripod
+  root or fifth, right tripod third or seventh, approach tone into a chord
+  change, velocity from the stepping legs' rate.
+- Drums (`fruitless.flies.drums`): DNa02 at 70 Hz plus the ears. Power MN
+  rate is kick and ride, steering MN rate is snare and hi-hat, hg is toms,
+  burstiness is ghost notes, the giant fiber is a crash. Synthesised from
+  noise and pitched thumps, deterministic.
+- `fruitless remap` re-runs mappers and audio from a take's recorded motor
+  readouts without simulating, so musical rules iterate in seconds instead of
+  minutes. It found a bug straight away: chord tones were sorted from C, so
+  the bass played C on an F7. Tones are now ordered from the root.
+- Meshes: quadric decimation (pyfqmr, `--decimate 0.35`) in the fetch. 522
+  neurons across three flies at 39 MB against 180 MB for 641 at float32 in
+  phase 2. `mesh_groups` per fly chooses which groups are meshes; ears and
+  premotor pools stay as points.
+- Stage: one performer per fly, brain above riser, side by side; bass on an
+  upright, drummer behind a kit whose pieces nudge on hits; rigs for bass
+  (legs lift with their MN rate, foreleg plucks on a footfall) and drums (both
+  wings beat with power MN rate, hind leg stamps the kick); panels follow the
+  soloist; the camera frames the bandstand from the canvas aspect and pans
+  toward the soloist until the user takes over.
+- Verified in Chrome during playback: bass pose lifts legs 0.85/0.50/0.85
+  left and 0.57/0.79/0.48 right (the tripod pattern), drummer flap 0.58 rad,
+  sax pathway rates on the strip, all three nerve cords glowing.
+- The plan's acceptance line asked for the bass fly's `JO-*` meshes to light
+  when the sax plays; ears are soma points, not meshes, so that reads on the
+  readout strip (jo_a 35 Hz, jo_b 48 Hz while the head plays) rather than on
+  a mesh.

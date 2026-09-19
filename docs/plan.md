@@ -47,8 +47,8 @@ signal seen three ways.
 
 | Role | Circuit (MaleCNS `type` names) | Motor readout | Instrument | Body animation driven by the same readout |
 |---|---|---|---|---|
-| Drums | Wing motor neurons `DLMn *`, `DVMn *`, `b1 MN`..`tp2 MN`; flight DNs | Left/right power and steering MN rates | Kit, one MN group per drum | Wings beat the kit; left/right asymmetry picks the drum |
-| Bass | Leg MNs (`Ti flexor MN`, `Tr extensor MN`, ...) by `subclass` fl/ml/hl; walking DNs `DNp09`, `DNa02`, `MDN`, `DNa01`, `DNg11` | Six leg-group rates, gait phase | Bass, footfall = note | Legs walk the bass line; forelegs pluck on footfall |
+| Drums | Wing motor neurons `DLMn *`, `DVMn *`, `b1 MN`..`tp2 MN`; steering DN `DNa02` | Power, steering and hg MN rates, burstiness | Kit: power = kick and ride, steering = snare and hi-hat, hg = toms, giant fiber = crash | Wings beat the kit; hind leg stamps the pedal |
+| Bass | Leg MNs (`Ti flexor MN`, `Tr extensor MN`, ...) by `subclass` fl/ml/hl, driven through each leg's connectome-derived excitatory premotor pool (walking DNs shown, not effective in the model) | Six leg-group rates, tripod step flags | Bass, footfall = note | Legs walk the bass line; forelegs pluck on footfall |
 | Sax (soloist) | `pC1_*` cluster, `pIP10`, `vPR6`, `dPR1`, `TN1a_*`/`TN1c_*`, wing MNs | Pulse vs sine song, intensity | Lead voice | One wing extended and vibrating, as in real courtship song; body pitch with intensity |
 | Piano (comping) | Central complex `EPG`, `EPGt`, `PEN_a(PEN1)`, `PEN_b(PEN2)`, `Delta7` | Bump position on the ring (12 wedges = circle of fifths) | Chord voicings | Head turns with the bump heading; forelegs on the keys by wedge |
 | Ears (all) | `JO-A*`, `JO-B*`, `AMMC*` | input only | none | Antennae twitch with input rate |
@@ -267,9 +267,20 @@ Each phase ends with something you can open in a browser.
 - Bass and drums flies, their readouts, their rig mappings, their meshes.
 - Coupling: sax to rhythm section ears, and back.
 - Stage: bandstand layout, camera that follows the solo, per-fly brain panels.
+- **Design change from the probe** (`docs/log.md`, "what moves the legs?"):
+  descending walking commands do not move leg motor neurons in this model,
+  because their strongest inputs are inhibitory premotor interneurons and the
+  model has no pattern generator. Each leg's excitatory premotor pool, derived
+  from the pack, does move that leg selectively. So the conductor drives the
+  tripod pools in alternation on the beat, and the page says the gait timing
+  is the conductor's while which motor neurons fire, how hard, and the
+  crosstalk are the fly's. Wings respond to any drive, so the drummer runs on
+  steering descending neurons plus what it hears, with voices split by muscle
+  type (power vs steering) since left and right were symmetric.
 - **Done when:** a three fly take of a blues plays head in, one chorus, head
   out; the bass fly's legs walk the line; the bass fly's `JO-*` meshes light
-  when the sax plays.
+  when the sax plays. **Done 2026-09-19**; ears read on the strip rather than
+  as meshes. See `docs/log.md`.
 
 ### Phase 5: the pianist, the mushroom body and free style (weeks 9-10)
 - Piano fly on the central complex bump; chart changes rotate the bump.

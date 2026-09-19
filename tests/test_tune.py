@@ -39,7 +39,7 @@ def test_swing_offset_only_on_offbeats():
 
 def test_chord_theory():
     tones, scale = chord_pitch_classes("F7", "F")
-    assert tones == (0, 3, 5, 9)          # F A C Eb
+    assert tones == (5, 9, 0, 3)          # F A C Eb, ordered from the root
     assert 10 in scale and 4 not in scale  # mixolydian: Eb yes, E no
     tones, _ = chord_pitch_classes("Bm7b5", "C")
-    assert tones == (2, 5, 9, 11)
+    assert tones == (11, 2, 5, 9)         # B D F A

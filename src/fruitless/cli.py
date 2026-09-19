@@ -162,6 +162,16 @@ def cmd_take(args) -> int:
     return 0
 
 
+def cmd_remap(args) -> int:
+    """Re-run mapping and audio from a take's recorded readouts, without simulating."""
+    from fruitless.conductor.take import remap
+    rep = remap(Path(args.take), args.tune, render_audio=not args.no_audio)
+    for f in rep["flies"]:
+        print(f"  {f['role']}: {f['n_notes']} notes")
+    print(f"audio: {rep['audio']}")
+    return 0
+
+
 def cmd_meshes(args) -> int:
     """Fetch hero meshes for a bundle: every neuron in its flies' circuit groups."""
     from lif import core
@@ -178,8 +188,8 @@ def cmd_meshes(args) -> int:
         idx = sorted(set(idx) | set(args.indices))
     print(f"{len(idx)} hero neurons -> {bundle / 'meshes'} (lod {args.lod})", file=sys.stderr)
     doc = fetch_meshes(bundle, pack.neuron_ids, np.array(idx, dtype=np.int64), lod=args.lod,
-                       overwrite=args.overwrite)
-    manifest["meshes"] = {"index": "meshes/index.json", "lod": args.lod,
+                       overwrite=args.overwrite, decimate_ratio=args.decimate)
+    manifest["meshes"] = {"index": "meshes/index.json", "lod": args.lod, "decimate": args.decimate,
                           "n": len(doc["neurons"]),
                           "vertices": sum(m["vertices"] for m in doc["neurons"].values()),
                           "bytes": sum(m.get("bytes", 0) for m in doc["neurons"].values())}
@@ -230,12 +240,19 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--no-audio", action="store_true")
     p.set_defaults(fn=cmd_take)
 
+    p = sub.add_parser("remap", help="re-run mappers and audio from a take's motor readouts (no simulation)")
+    p.add_argument("take", type=Path, help="e.g. takes/blues-in-f")
+    p.add_argument("--tune", type=Path, default=None)
+    p.add_argument("--no-audio", action="store_true")
+    p.set_defaults(fn=cmd_remap)
+
     p = sub.add_parser("meshes", help="fetch hero neuron meshes into a bundle (needs --extra meshes)")
     p.add_argument("bundle", type=Path, help="e.g. stage/public/takes/smoke")
     p.add_argument("--pack", type=Path, default=paths.PACK)
     p.add_argument("--lod", type=int, default=3, help="3 is coarsest (~28k vertices for a big MN)")
     p.add_argument("--indices", type=int, nargs="*", default=None, help="extra pack indices")
     p.add_argument("--overwrite", action="store_true")
+    p.add_argument("--decimate", type=float, default=0.35, help="target triangle ratio after LOD 3 (1 = none)")
     p.set_defaults(fn=cmd_meshes)
 
     args = ap.parse_args(argv)

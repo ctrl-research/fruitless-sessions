@@ -9,7 +9,7 @@ import { AudioClock } from './clock'
 import { Score, type TuneInfo, type NoteEvent } from './score'
 import { FlyBody, idlePose } from './body/fly'
 import { rigFor } from './body/rig'
-import { riser, saxophone } from './body/instruments'
+import { drumKit, riser, saxophone, upright } from './body/instruments'
 
 const params = new URLSearchParams(location.search)
 const takeName = params.get('take') ?? 'smoke'
@@ -19,14 +19,15 @@ async function main() {
   const status = document.getElementById('status')!
   status.textContent = `loading ${takeName}…`
   const take = await loadTake(base)
-  const fly = take.flies[0]
-  const soma = fly.layers['soma']
+  const flies = take.flies
+  const fly = flies[0]   // the readout / rig panels show the current soloist; starts on the first fly
+  const soma0 = fly.layers['soma']
   status.textContent = ''
 
-  document.getElementById('title')!.textContent = `${take.manifest.name} · ${fly.entry.role}`
+  document.getElementById('title')!.textContent = `${take.manifest.name} · ${flies.map(f => f.entry.role).join(' · ')}`
   document.getElementById('meta')!.textContent =
     `${take.manifest.shared.with_soma.toLocaleString()} of ${take.manifest.shared.n_neurons.toLocaleString()} neurons have a soma · ` +
-    `soma layer ${soma.meta.bin_ms} ms bins · hero layer ${fly.layers['hero']?.meta.bin_ms ?? '–'} ms bins · seed ${take.manifest.seed}`
+    `soma layer ${soma0.meta.bin_ms} ms bins · hero layer ${fly.layers['hero']?.meta.bin_ms ?? '–'} ms bins · seed ${take.manifest.seed}`
 
   // ---------------------------------------------------------------- scene
   const canvas = document.getElementById('stage') as HTMLCanvasElement
@@ -34,199 +35,274 @@ async function main() {
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
   const scene = new THREE.Scene()
   scene.background = new THREE.Color(0x07070b)
-
-  const points = new BrainPoints(take.somaXyz, take.superclass, take.manifest.shared.superclass_legend)
-  scene.add(points.object)
   scene.add(new THREE.AmbientLight(0xffffff, 0.35))
   const key = new THREE.DirectionalLight(0xffffff, 1.2)
   key.position.set(1, 1, 1)
   scene.add(key)
 
-  // hero meshes: the circuit groups' neurons as real morphology, if the bundle has them
-  const hero = fly.layers['hero']
-  const heroMeshes = new HeroMeshes(base)
-  const groupOfIndex = new Map<number, string>()
-  for (const [g, idx] of Object.entries(fly.entry.circuit)) for (const i of idx) groupOfIndex.set(i, g)
+  // one performer per fly: brain (points + meshes) above, body on a riser below, side by side
+  interface Performer {
+    entry: typeof fly.entry
+    layers: typeof fly.layers
+    points: BrainPoints
+    meshes: HeroMeshes
+    body: FlyBody
+    rig: ReturnType<typeof rigFor>
+    pose: ReturnType<typeof idlePose>
+    group: THREE.Group
+    heroIds: Int32Array | null
+    heroPos: Map<number, number>
+    groups: [string, number[]][]
+    rate: Float32Array
+    smooth: Float32Array
+    lastBin: number
+    lastHeroBin: number
+    motor: { names: string[]; steps: number; data: Float32Array } | null
+    notes: NoteEvent[]
+    kitHits: Record<string, THREE.Object3D> | null
+  }
+  const performers: Performer[] = []
+  const proto = new BrainPoints(take.somaXyz, take.superclass, take.manifest.shared.superclass_legend)
+  const R = proto.radius
+  const spacing = R * 2.4
+  const x0 = -spacing * (flies.length - 1) / 2
+  const bodyScale = R * 0.2
   const meshInfo = (take.manifest as unknown as { meshes?: { index: string } }).meshes
+  for (let fi = 0; fi < flies.length; fi++) {
+    const f = flies[fi]
+    const group = new THREE.Group()
+    group.position.set(x0 + fi * spacing, 0, 0)
+    scene.add(group)
+    const points = fi === 0 ? proto : new BrainPoints(take.somaXyz, take.superclass, take.manifest.shared.superclass_legend)
+    // brain centred on the performer's x, standing above the riser
+    points.object.position.set(-points.center.x, -points.center.y + R * 1.05, -points.center.z)
+    group.add(points.object)
+    const meshes = new HeroMeshes(base)
+    meshes.group.position.copy(points.object.position)
+    group.add(meshes.group)
+    const stand = new THREE.Group()
+    stand.position.set(0, -R * 0.35, R * 0.35)
+    stand.add(riser(bodyScale * 3.2))
+    const performer = new THREE.Group()
+    performer.rotation.y = 0.6 - fi * 0.15
+    stand.add(performer)
+    const body = new FlyBody(bodyScale)
+    performer.add(body.group)
+    let kitHits: Record<string, THREE.Object3D> | null = null
+    if (f.entry.role === 'sax') {
+      const horn = saxophone(bodyScale); horn.position.set(0, 0, bodyScale * 0.55); performer.add(horn)
+    } else if (f.entry.role === 'bass') {
+      const b = upright(bodyScale); b.position.set(bodyScale * 0.6, 0, bodyScale * 0.4); performer.add(b)
+    } else if (f.entry.role === 'drums') {
+      const kit = drumKit(bodyScale); kit.group.position.set(0, 0, bodyScale * 0.9); performer.add(kit.group); kitHits = kit.hits
+    }
+    group.add(stand)
+    const spot = new THREE.SpotLight(0xfff1d6, 60, R * 3, 0.5, 0.6, 1.2)
+    spot.position.set(stand.position.x + bodyScale * 4, stand.position.y + bodyScale * 10, stand.position.z + bodyScale * 6)
+    spot.target = stand
+    group.add(spot)
+    const heroIds = f.layers['hero'] ? await f.layers['hero'].subset : null
+    const heroPos = new Map<number, number>()
+    heroIds?.forEach((packIdx, k) => heroPos.set(packIdx, k))
+    const groups = Object.entries(f.entry.circuit)
+    performers.push({
+      entry: f.entry, layers: f.layers, points, meshes, body, rig: rigFor(f.entry.role), pose: idlePose(), group,
+      heroIds, heroPos, groups, rate: new Float32Array(groups.length), smooth: new Float32Array(groups.length),
+      lastBin: -1, lastHeroBin: -1, motor: null, notes: [], kitHits,
+    })
+  }
+  // hero meshes for every performer, behind the transport
   if (meshInfo) {
-    // meshes are the heaviest download; load them behind the transport so the page is
-    // usable at once and the meshes fade in when they arrive
     status.textContent = 'loading hero meshes…'
-    fetch(`${base}/${meshInfo.index}`).then(r => r.json()).then((index: MeshIndex) =>
-      heroMeshes.load(index, i => groupOfIndex.get(i)).then(() => {
-        scene.add(heroMeshes.group)
-        status.textContent = ''
-        document.getElementById('meta')!.textContent += ` · ${heroMeshes.count} hero meshes (lod ${index.lod})`
-      })).catch(err => { status.textContent = `meshes: ${err}`; console.error(err) })
+    fetch(`${base}/${meshInfo.index}`).then(r => r.json()).then(async (index: MeshIndex) => {
+      for (const pf of performers) {
+        const mg = (pf.entry as unknown as { mesh_groups?: string[] }).mesh_groups
+        const mine = new Set(Object.entries(pf.entry.circuit).filter(([g]) => !mg || mg.includes(g)).flatMap(([, idx]) => idx))
+        const sub: MeshIndex = { ...index, neurons: Object.fromEntries(Object.entries(index.neurons).filter(([k]) => mine.has(Number(k)))) }
+        const groupOf = new Map<number, string>()
+        for (const [g, idx] of Object.entries(pf.entry.circuit)) for (const i of idx) groupOf.set(i, g)
+        await pf.meshes.load(sub, i => groupOf.get(i))
+      }
+      status.textContent = ''
+      document.getElementById('meta')!.textContent += ` · ${performers.reduce((n, pf) => n + pf.meshes.count, 0)} hero meshes (lod ${index.lod})`
+    }).catch(err => { status.textContent = `meshes: ${err}`; console.error(err) })
   }
 
   const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 5000)
-  const c = points.center, r = points.radius
-  camera.position.set(c.x + r * 1.6, c.y + r * 0.3, c.z + r * 1.4)
-  camera.lookAt(c)
   const controls = new OrbitControls(camera, canvas)
-  controls.target.copy(c)
   controls.enableDamping = true
-  controls.autoRotate = false   // a bandstand has a front; orbit by hand
-  controls.autoRotateSpeed = 0.4
-  controls.addEventListener('start', () => { controls.autoRotate = false })
-
+  controls.autoRotate = false
+  const lookAt = new THREE.Vector3(0, R * 0.3, 0)
+  controls.target.copy(lookAt)
+  let userMoved = false
+  controls.addEventListener('start', () => { userMoved = true })
+  let camDist = R * 6
   function resize() {
     const w = canvas.clientWidth, h = canvas.clientHeight
+    if (w === 0 || h === 0) return
     renderer.setSize(w, h, false)
     camera.aspect = w / h
     camera.updateProjectionMatrix()
+    // back off until the bandstand's half-width fits the horizontal half-angle of the lens,
+    // with margin; re-framed on every resize until the user takes the camera
+    const halfWidth = (spacing * (flies.length - 1) / 2 + R * 1.5) * 1.3
+    const halfAngle = Math.atan(Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect)
+    camDist = halfWidth / Math.tan(halfAngle)
+    if (!userMoved) {
+      camera.position.set(controls.target.x, R * 0.5, camDist)
+      camera.lookAt(controls.target)
+    }
   }
   new ResizeObserver(resize).observe(canvas)
   resize()
 
-  // ---------------------------------------------------------------- bandstand
-  // the fly stands on a riser to the left of its brain, at brain scale
-  const bodyScale = points.radius * 0.2
-  const stand = new THREE.Group()
-  stand.position.set(points.center.x - points.radius * 1.6, points.center.y - points.radius * 0.6, points.center.z + points.radius * 0.3)
-  stand.add(riser(bodyScale * 3.2))
-  const performer = new THREE.Group()          // fly + instrument, turned toward the audience
-  performer.rotation.y = 0.75
-  stand.add(performer)
-  const flyBody = new FlyBody(bodyScale)
-  performer.add(flyBody.group)
-  if (fly.entry.role === 'sax') {
-    const horn = saxophone(bodyScale)
-    horn.position.set(0, 0, bodyScale * 0.55)   // in front of the head, mouthpiece at the proboscis
-    performer.add(horn)
-  }
-  scene.add(stand)
-  const stageLight = new THREE.SpotLight(0xfff1d6, 60, points.radius * 3, 0.5, 0.6, 1.2)
-  stageLight.position.set(stand.position.x + bodyScale * 4, stand.position.y + bodyScale * 10, stand.position.z + bodyScale * 6)
-  stageLight.target = stand
-  scene.add(stageLight)
-  const rig = rigFor(fly.entry.role)
-  let prevPose = idlePose()
+  // panels follow the soloist; start on the first performer
+  let focus = 0
+  const readout = document.getElementById('readout')!
+  const motorEl = document.getElementById('motor')!
   const rigEl = document.getElementById('rig')!
-  rigEl.innerHTML = `<div class="title">rig · ${rig.role}</div>` + rig.rules.map(r =>
-    `<div class="rule"><span class="joint">${r.joint}</span> <span class="from">← ${r.from}</span><div class="text">${r.rule}</div></div>`).join('')
-
-  // widen the camera framing to include the stand
-  controls.target.copy(points.center).add(new THREE.Vector3(-points.radius * 0.75, -points.radius * 0.2, 0))
-  camera.position.set(points.center.x - points.radius * 1.0, points.center.y + points.radius * 0.15, points.center.z + points.radius * 2.4)
+  let bars: HTMLElement[] = []
+  let motorVals: HTMLElement[] = []
+  function showPanels(pf: Performer) {
+    readout.innerHTML = `<div class="title">${pf.entry.role} · circuit</div>` + pf.groups.map(([g, idx]) =>
+      `<div class="group"><span class="name">${g}</span><span class="n">${idx.length}</span><span class="bar"><i></i></span></div>`).join('')
+    bars = Array.from(readout.querySelectorAll<HTMLElement>('.bar i'))
+    if (pf.motor) {
+      motorEl.style.display = ''
+      motorEl.innerHTML = `<div class="title">${pf.entry.role} · motor readout</div>` + pf.motor.names.map(n => `<div class="m"><span class="name">${n}</span><span class="v">–</span></div>`).join('')
+      motorVals = Array.from(motorEl.querySelectorAll<HTMLElement>('.v'))
+    } else motorEl.style.display = 'none'
+    rigEl.innerHTML = `<div class="title">rig · ${pf.rig.role}</div>` + pf.rig.rules.map(r =>
+      `<div class="rule"><span class="joint">${r.joint}</span> <span class="from">← ${r.from}</span><div class="text">${r.rule}</div></div>`).join('')
+  }
 
   // ---------------------------------------------------------------- transport
-  const duration = take.manifest.duration_s || soma.durationS
+  const duration = take.manifest.duration_s || soma0.durationS
   const transport = new Transport(duration, document.getElementById('transport')!)
   const audioSrc = take.manifest.audio ? `${base}/${take.manifest.audio}` : null
   const clock = new AudioClock(transport, audioSrc)
   clock.onBlocked = why => { status.textContent = `audio blocked by the browser (${why.split(':')[0]}); running silent on the frame clock` }
-  ;(window as unknown as { __fs: unknown }).__fs = { transport, clock, take }
+  ;(window as unknown as { __fs: unknown }).__fs = { transport, clock, take, performers }
 
   // score: tune, notes per role, motor readouts
   const tuneInfo = (take.manifest as unknown as { tune?: TuneInfo }).tune ?? null
   const notesByRole: Record<string, NoteEvent[]> = {}
-  const motorByRole: Record<string, { names: string[]; steps: number; data: Float32Array }> = {}
-  for (const f of take.manifest.flies as unknown as { role: string; notes?: string; motor?: { file: string; names: string[]; steps: number } }[]) {
-    if (f.notes) notesByRole[f.role] = await (await fetch(`${base}/${f.notes}`)).json()
+  for (const pf of performers) {
+    const f = pf.entry as unknown as { role: string; notes?: string; motor?: { file: string; names: string[]; steps: number } }
+    if (f.notes) { pf.notes = await (await fetch(`${base}/${f.notes}`)).json(); notesByRole[f.role] = pf.notes }
     if (f.motor) {
       const buf = await (await fetch(`${base}/${f.motor.file}`)).arrayBuffer()
-      motorByRole[f.role] = { names: f.motor.names, steps: f.motor.steps, data: new Float32Array(buf) }
+      pf.motor = { names: f.motor.names, steps: f.motor.steps, data: new Float32Array(buf) }
     }
   }
   const score = tuneInfo ? new Score(tuneInfo, notesByRole) : null
   const strip = document.getElementById('score') as HTMLCanvasElement
   const nowEl = document.getElementById('now')!
-  const motorEl = document.getElementById('motor')!
-  const motor = motorByRole[fly.entry.role]
-  if (motor) motorEl.innerHTML = motor.names.map(n => `<div class="m"><span class="name">${n}</span><span class="v">–</span></div>`).join('')
-  else motorEl.style.display = 'none'
-  const motorVals = Array.from(motorEl.querySelectorAll<HTMLElement>('.v'))
   if (!score) strip.style.display = 'none'
-  let lastBin = -1
-  let lastHeroBin = -1
+  showPanels(performers[focus])
 
-  // ---------------------------------------------------------------- readout strip
-  const heroIds = hero ? await hero.subset : null
-  const circuit = fly.entry.circuit
-  const readout = document.getElementById('readout')!
-  const groups = Object.entries(circuit)
-  readout.innerHTML = groups.map(([g, idx]) =>
-    `<div class="group"><span class="name">${g}</span><span class="n">${idx.length}</span><span class="bar"><i></i></span></div>`).join('')
-  const bars = Array.from(readout.querySelectorAll<HTMLElement>('.bar i'))
-  const heroPos = new Map<number, number>()
-  heroIds?.forEach((packIdx, k) => heroPos.set(packIdx, k))
-  const groupRate = new Float32Array(groups.length)
-  const groupSmooth = new Float32Array(groups.length)   // running mean over ~100 ms of bins
+  transport.addSeekListener(() => {
+    for (const pf of performers) { pf.points.clearHeat(); pf.meshes.clearHeat(); pf.lastBin = -1; pf.lastHeroBin = -1; pf.smooth.fill(0) }
+  })
 
-  transport.addSeekListener(() => { points.clearHeat(); heroMeshes.clearHeat(); lastBin = -1; lastHeroBin = -1; groupSmooth.fill(0) })
+  // camera drifts toward the soloist's performer
+  const camTarget = new THREE.Vector3().copy(lookAt)
+  function soloistIndex(t: number): number {
+    if (!score) return 0
+    const sec = score.sectionAt(t)
+    const who = sec?.kind === 'head' ? 'sax' : sec?.who?.[0]
+    const i = performers.findIndex(pf => pf.entry.role === who)
+    return i < 0 ? 0 : i
+  }
 
   // ---------------------------------------------------------------- loop
   function frame(now: number) {
     const dt = transport.tick(now)
     if (clock.audio && clock.active && transport.playing) transport.sync(clock.time())
     const tNow = transport.time
-    const bin = soma.binAt(tNow)
-    soma.prefetch(bin)
-    if (bin !== lastBin) {
-      // apply every bin we skipped over since the last frame, so fast playback still shows spikes
-      const from = lastBin < 0 || bin < lastBin ? bin : lastBin + 1
-      for (let b = from; b <= bin; b++) {
-        const ev = soma.binSync(b)
-        if (ev) points.addBin(ev.neuron, ev.count)
+    const si = soloistIndex(tNow)
+    if (si !== focus) { focus = si; showPanels(performers[focus]) }
+    const step = tuneInfo ? Math.max(0, Math.floor(tNow / tuneInfo.step_s)) : 0
+
+    for (let pi = 0; pi < performers.length; pi++) {
+      const pf = performers[pi]
+      const soma = pf.layers['soma']
+      const hero = pf.layers['hero']
+      const bin = soma.binAt(tNow)
+      soma.prefetch(bin)
+      if (bin !== pf.lastBin) {
+        const from = pf.lastBin < 0 || bin < pf.lastBin ? bin : pf.lastBin + 1
+        for (let b = from; b <= bin; b++) { const ev = soma.binSync(b); if (ev) pf.points.addBin(ev.neuron, ev.count) }
+        pf.lastBin = bin
       }
-      lastBin = bin
-    }
-    if (hero && heroIds) {
-      const hb = hero.binAt(tNow)
-      if (hb !== lastHeroBin) {
-        // walk every bin since the last frame so a slow frame does not skip spikes
-        const from = lastHeroBin < 0 || hb < lastHeroBin ? hb : lastHeroBin + 1
-        for (let b = from; b <= hb; b++) {
-          const ev = hero.binSync(b)
-          if (!ev) continue
-          heroMeshes.addBin(ev.neuron, ev.count, heroIds)
-          groupRate.fill(0)
-          groups.forEach(([, idx], gi) => {
-            let s = 0
-            for (const packIdx of idx) {
-              const k = heroPos.get(packIdx)
-              if (k === undefined) continue
-              for (let e = 0; e < ev.neuron.length; e++) if (ev.neuron[e] === k) s += ev.count[e]
-            }
-            // spikes per neuron per bin -> Hz
-            groupRate[gi] = (s / Math.max(1, idx.length)) * (1000 / hero.meta.bin_ms)
-          })
-          for (let gi = 0; gi < groups.length; gi++) groupSmooth[gi] += (groupRate[gi] - groupSmooth[gi]) * 0.1
+      if (hero && pf.heroIds) {
+        const hb = hero.binAt(tNow)
+        if (hb !== pf.lastHeroBin) {
+          const from = pf.lastHeroBin < 0 || hb < pf.lastHeroBin ? hb : pf.lastHeroBin + 1
+          for (let b = from; b <= hb; b++) {
+            const ev = hero.binSync(b)
+            if (!ev) continue
+            pf.meshes.addBin(ev.neuron, ev.count, pf.heroIds)
+            pf.rate.fill(0)
+            pf.groups.forEach(([, idx], gi) => {
+              let s = 0
+              for (const packIdx of idx) {
+                const k = pf.heroPos.get(packIdx)
+                if (k === undefined) continue
+                for (let e = 0; e < ev.neuron.length; e++) if (ev.neuron[e] === k) s += ev.count[e]
+              }
+              pf.rate[gi] = (s / Math.max(1, idx.length)) * (1000 / hero.meta.bin_ms)
+            })
+            for (let gi = 0; gi < pf.groups.length; gi++) pf.smooth[gi] += (pf.rate[gi] - pf.smooth[gi]) * 0.1
+          }
+          pf.lastHeroBin = hb
+          if (pi === focus) {
+            bars.forEach((el, gi) => { el.style.width = `${Math.min(100, pf.smooth[gi] / 1.5)}%` })
+            readout.querySelectorAll<HTMLElement>('.n').forEach((el, gi) => { el.textContent = `${pf.smooth[gi].toFixed(0)} Hz` })
+          }
         }
-        bars.forEach((el, gi) => { el.style.width = `${Math.min(100, groupSmooth[gi] / 1.5)}%`; el.title = `${groupSmooth[gi].toFixed(0)} Hz` })
-        readout.querySelectorAll<HTMLElement>('.n').forEach((el, gi) => { el.textContent = `${groupSmooth[gi].toFixed(0)} Hz` })
-        lastHeroBin = hb
       }
+      // body from the same signals as the music
+      const readoutNow: Record<string, number> = {}
+      if (pf.motor) {
+        const st = Math.min(pf.motor.steps - 1, step)
+        pf.motor.names.forEach((n, i) => { readoutNow[n] = pf.motor!.data[st * pf.motor!.names.length + i] })
+        if (pi === focus) pf.motor.names.forEach((_, i) => { motorVals[i].textContent = readoutNow[pf.motor!.names[i]].toFixed(1) })
+      }
+      const rates: Record<string, number> = {}
+      pf.groups.forEach(([g], gi) => { rates[g] = pf.smooth[gi] })
+      const sounding = pf.notes.filter(n => n.t <= tNow && tNow < n.t + n.dur)
+      const noteAge = sounding.length ? tNow - Math.max(...sounding.map(n => n.t)) : 0
+      pf.pose = pf.rig.pose({ readout: readoutNow, rates, noteOn: sounding.length > 0, noteAge, t: tNow }, pf.pose, dt)
+      pf.body.apply(pf.pose, transport.playing ? dt : 0)
+      if (pf.kitHits) {
+        // nudge the drum that was just hit
+        for (const n of sounding) {
+          const name = n.midi === 36 ? 'kick' : n.midi === 38 ? 'snare' : n.midi === 42 ? 'hat' : n.midi === 51 ? 'ride' : n.midi === 45 ? 'tom_lo' : n.midi === 47 ? 'tom_hi' : 'crash'
+          const o = pf.kitHits[name]
+          if (o) o.position.y += 0.02 * bodyScale * Math.exp(-(tNow - n.t) * 15) * Math.sin(tNow * 90)
+        }
+      }
+      pf.points.update(dt)
+      pf.meshes.update(dt)
     }
+
     if (score) {
       score.drawStrip(strip, tNow)
       const sec = score.sectionAt(tNow)
-      const sounding = score.soundingAt(fly.entry.role, tNow)
+      const sounding = performers.flatMap(pf => pf.notes.filter(n => n.t <= tNow && tNow < n.t + n.dur).map(n => `${pf.entry.role[0]}:${noteName(n.midi)}`))
       nowEl.textContent = `bar ${score.barAt(tNow) + 1} · ${score.chordAt(tNow) || '–'} · ${sec ? sec.kind + (sec.who.length ? ' ' + sec.who.join('/') : '') : ''}` +
-        (sounding.length ? ` · ♪ ${sounding.map(n => noteName(n.midi)).join(' ')}` : '')
+        (sounding.length ? ` · ♪ ${sounding.slice(0, 6).join(' ')}` : '')
     }
-    if (motor && tuneInfo) {
-      const step = Math.min(motor.steps - 1, Math.max(0, Math.floor(tNow / tuneInfo.step_s)))
-      motor.names.forEach((_, i) => { motorVals[i].textContent = motor.data[step * motor.names.length + i].toFixed(1) })
+    // camera pans (not pivots) toward the soloist until the user takes over
+    const pfx = performers[focus].group.position.x
+    camTarget.set(pfx * 0.2, R * 0.3, 0)
+    if (!userMoved) {
+      const kcam = 1 - Math.exp(-dt * 1.5)
+      const dx = (camTarget.x - controls.target.x) * kcam
+      controls.target.x += dx
+      camera.position.x += dx
     }
-    // body from the same signals as the music
-    {
-      const step = motor && tuneInfo ? Math.min(motor.steps - 1, Math.max(0, Math.floor(tNow / tuneInfo.step_s))) : 0
-      const readout: Record<string, number> = {}
-      if (motor) motor.names.forEach((n, i) => { readout[n] = motor.data[step * motor.names.length + i] })
-      const rates: Record<string, number> = {}
-      groups.forEach(([g], gi) => { rates[g] = groupSmooth[gi] })
-      const sounding = score ? score.soundingAt(fly.entry.role, tNow) : []
-      const noteAge = sounding.length ? tNow - Math.max(...sounding.map(n => n.t)) : 0
-      prevPose = rig.pose({ readout, rates, noteOn: sounding.length > 0, noteAge, t: tNow }, prevPose, dt)
-      flyBody.apply(prevPose, transport.playing ? dt : 0)
-      ;(window as unknown as { __fs: { pose?: unknown; readout?: unknown } }).__fs.pose = prevPose
-      ;(window as unknown as { __fs: { pose?: unknown; readout?: unknown } }).__fs.readout = readout
-    }
-    points.update(dt)
-    heroMeshes.update(dt)
     controls.update()
     renderer.render(scene, camera)
     requestAnimationFrame(frame)

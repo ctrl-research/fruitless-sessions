@@ -43,3 +43,5 @@ main { position: relative; min-height: 0; }
 .rig .from { color: var(--accent); }
 .rig .text { color: var(--dim); }
 @media (max-width: 900px) { .rig { display: none; } }
+
+.readout .title, .motor .title { color: var(--fg); font-size: 12px; margin-bottom: 4px; }

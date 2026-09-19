@@ -6,13 +6,13 @@ jazz ensemble. The product is a static web page that plays a recorded set and,
 in sync with the music, shows each fly's brain activity on its real neuron
 anatomy next to a 3D animated fly playing its instrument.
 
-Status: **phase 3**. A studio take runs the sax fly through a tune: the
-courtship song circuit is driven along the melody, wing motor neuron activity
-becomes notes, audio is rendered, and the stage page plays it back with the
-audio as the clock, brain activity on soma points and hero meshes, the chart,
-the form, the motor readouts, and a procedural fly on a riser whose wing,
-legs, body and proboscis are posed every frame from those same readouts. One
-fly so far.
+Status: **phase 4**. Three flies, sax, bass and drums, play a 72 second
+blues together, coupled through their ears. Each is the full 166,700-neuron
+brain; the courtship song circuit sings the head, connectome-derived leg
+premotor pools walk the bass, wing motor neurons beat the kit. The page plays
+the take back with the audio as the clock: three brains lit by their spikes
+above three procedural flies posed from the same motor readouts that made the
+notes.
 See [`docs/plan.md`](docs/plan.md) for the plan and
 [`docs/reference.md`](docs/reference.md) for the data facts it relies on.
 
@@ -38,7 +38,8 @@ uv run fruitless fetch-data      # ~1.1 GB, three Feather tables, SHA-256 checke
 uv run fruitless pack            # ~90 s, writes data/pack/male_cns_v1 (189 MiB)
 uv run pytest                    # unit tests plus one GPU parity test
 uv run fruitless smoke           # sweet taste drives MN9 for 1 s; writes takes/smoke/
-uv run fruitless take tunes/blues-in-f/tune.yaml       # ~2 min: 72 s blues, sax only
+uv run fruitless take tunes/blues-in-f/tune.yaml       # ~6 min: 72 s blues, three flies
+uv run fruitless remap takes/blues-in-f                # re-map notes and audio without simulating
 uv run fruitless bundle takes/blues-in-f               # -> stage/public/takes/blues-in-f
 uv sync --extra meshes && uv run fruitless meshes stage/public/takes/smoke   # hero meshes
 cd stage && npm install && npm run dev                 # http://localhost:5173/?take=blues-in-f
