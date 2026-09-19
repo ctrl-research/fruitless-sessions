@@ -106,7 +106,7 @@ async function main() {
   const bassSeat = seats.get('bass')
   if (seats.has('sax') && bassSeat) {
     const outward = Math.sign(bassSeat.x) || 1
-    seats.set('sax', new THREE.Vector3(bassSeat.x + outward * formationR * 0.75, 0, bassSeat.z + formationR * 0.45))   // and a step forward
+    seats.set('sax', new THREE.Vector3(bassSeat.x + outward * formationR * 0.45, 0, bassSeat.z + formationR * 0.8))   // forward of the bassist, a little to the outside
   }
   // the disc reaches just past the furthest seat, so a performer stepped forward still stands on it
   const reach = Math.max(formationR, ...[...seats.values()].map(v => Math.hypot(v.x, v.z)))
