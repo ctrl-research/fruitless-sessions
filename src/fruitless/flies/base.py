@@ -37,9 +37,16 @@ class Fly:
     _idx: dict[str, np.ndarray] = field(default_factory=dict, init=False)
     _drive_idx: dict[str, np.ndarray] = field(default_factory=dict, init=False)
 
-    def resolve(self, r: Resolver) -> None:
+    def resolve(self, r: Resolver, pack=None) -> None:
+        """Resolve annotation-based groups. Flies that derive groups from connectivity
+        override `derive(r, pack)`, which runs after the annotation groups exist."""
         self._idx = r.resolve({**self.circuit, **EARS, **ESCAPE})
         self._drive_idx = r.resolve(self.drive)
+        if pack is not None:
+            self.derive(r, pack)
+
+    def derive(self, r: Resolver, pack) -> None:
+        """Hook for connectivity-derived groups; default does nothing."""
 
     @property
     def groups(self) -> dict[str, np.ndarray]:
@@ -47,6 +54,37 @@ class Fly:
 
     def indices(self, group: str) -> np.ndarray:
         return self._idx[group] if group in self._idx else self._drive_idx[group]
+
+    def add_group(self, name: str, idx: np.ndarray, *, drive: bool = False) -> None:
+        idx = np.unique(np.asarray(idx, dtype=np.int32))
+        (self._drive_idx if drive else self._idx)[name] = idx
+
+    @staticmethod
+    def excitatory_partners(pack, target_idx: np.ndarray, n: int = 60,
+                            exclude_superclasses: tuple[str, ...] = ("vnc_motor",),
+                            superclass_of=None) -> np.ndarray:
+        """The n presynaptic neurons with the largest positive summed weight onto target_idx.
+
+        Derived from the pack's CSR (source-major). Excludes motor neurons so the
+        pool is premotor, not the targets themselves.
+        """
+        rp = np.asarray(pack.row_ptr)
+        dst = np.asarray(pack.destinations)
+        cnt = np.asarray(pack.signed_counts)
+        src = np.repeat(np.arange(pack.n_neurons), np.diff(rp))
+        target = np.zeros(pack.n_neurons, dtype=bool)
+        target[np.asarray(target_idx)] = True
+        m = target[dst]
+        wsign = np.bincount(src[m], weights=cnt[m], minlength=pack.n_neurons)
+        order = np.argsort(-wsign)
+        out = []
+        for i in order:
+            if wsign[i] <= 0 or len(out) >= n:
+                break
+            if superclass_of is not None and superclass_of(int(i)) in exclude_superclasses:
+                continue
+            out.append(int(i))
+        return np.array(out, dtype=np.int32)
 
     def hero_indices(self) -> np.ndarray:
         return np.unique(np.concatenate([*self._idx.values(), *self._drive_idx.values()]))

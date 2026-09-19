@@ -95,6 +95,9 @@ class Resolver:
         rows = self._row_of_index[np.asarray(indices)]
         return self.table["type"].take(pa.array(rows)).to_pylist()
 
+    def superclass_of(self, index: int) -> str | None:
+        return self.table["superclass"][int(self._row_of_index[index])].as_py()
+
     def instances_of(self, indices: np.ndarray) -> list[str | None]:
         rows = self._row_of_index[np.asarray(indices)]
         return self.table["instance"].take(pa.array(rows)).to_pylist()

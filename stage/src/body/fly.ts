@@ -28,9 +28,10 @@ export interface Pose {
 export function idlePose(): Pose {
   return {
     wingExtend: [0.12, 0.12], wingFlap: 0, wingHz: 0,
+    // [coxa swing (+ forward), femur drop below the coxa line, tibia fold back down toward the floor]
     legs: [
-      [0.55, 0.35, -1.2], [0.0, 0.35, -1.2], [-0.55, 0.35, -1.2],
-      [0.55, 0.35, -1.2], [0.0, 0.35, -1.2], [-0.55, 0.35, -1.2],
+      [0.55, 0.15, 1.8], [0.0, 0.15, 1.8], [-0.55, 0.15, 1.8],
+      [0.55, 0.15, 1.8], [0.0, 0.15, 1.8], [-0.55, 0.15, 1.8],
     ],
     bodyHeight: 0, bodyPitch: 0, bodyRoll: 0, antennae: 0, abdomenScale: 1, proboscis: 0.1, headYaw: 0,
   }
@@ -80,7 +81,7 @@ export class FlyBody {
   constructor(scale = 1) {
     this.scale = scale
     this.group.add(this.body)
-    this.body.position.y = 0.75 * scale
+    this.body.position.y = 1.05 * scale
 
     // thorax
     const thorax = capsule(0.42 * scale, 0.5 * scale, MAT.thorax)
@@ -199,7 +200,7 @@ export class FlyBody {
   apply(p: Pose, dt: number): void {
     this.t += dt
     const s = this.scale
-    this.body.position.y = (0.75 + p.bodyHeight) * s
+    this.body.position.y = (1.05 + p.bodyHeight) * s
     this.body.rotation.set(p.bodyPitch, 0, p.bodyRoll)
     this.head.rotation.y = p.headYaw
     this.abdomen.scale.set(0.8 * p.abdomenScale, 0.7 * p.abdomenScale, 1.5)
@@ -216,10 +217,12 @@ export class FlyBody {
       const [swing, lift, bend] = p.legs[i]
       const side = i < 3 ? -1 : 1
       const L = this.legs[i]
-      // coxa: point femur outwards and down; swing forward/back about the body's X axis
-      L.coxa.rotation.set(swing, 0, side * (Math.PI / 2 + 0.25))
+      // coxa points outward and a little down (+Y of the segment -> (0.94·side, -0.34));
+      // femur and tibia then fold downward toward the ground on that side. The old sign
+      // pointed the coxa inward and up, which stood the fly on its back.
+      L.coxa.rotation.set(-swing, 0, -side * (Math.PI / 2 + 0.35))
       L.femur.rotation.z = -side * lift
-      L.tibia.rotation.z = side * bend
+      L.tibia.rotation.z = -side * Math.abs(bend)
     }
   }
 }

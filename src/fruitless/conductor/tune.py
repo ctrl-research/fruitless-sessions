@@ -140,6 +140,9 @@ _chord_cache: dict[str, tuple[tuple[int, ...], tuple[int, ...]]] = {}
 def chord_pitch_classes(symbol: str, key_name: str) -> tuple[tuple[int, ...], tuple[int, ...]]:
     """(chord tones, scale) as pitch classes 0..11 for a chord symbol like 'Bm7b5'.
 
+    Chord tones are ordered from the root (root, third, fifth, seventh); the
+    scale is sorted ascending from C.
+
     The scale is a pragmatic choice per chord quality: dominant -> mixolydian,
     minor 7 -> dorian, half-diminished -> locrian, major -> ionian (or lydian
     when the chord is not the key's tonic). Good enough to comp and solo on.
@@ -150,7 +153,8 @@ def chord_pitch_classes(symbol: str, key_name: str) -> tuple[tuple[int, ...], tu
     sym = symbol.replace("maj7", "M7").replace("m7b5", "m7b5").replace("Δ", "M7")
     cs = harmony.ChordSymbol(sym)
     root = cs.root().pitchClass
-    tones = tuple(sorted({p.pitchClass for p in cs.pitches}))
+    # chord tones ordered from the root upward: root, third, fifth, seventh
+    tones = tuple(sorted({p.pitchClass for p in cs.pitches}, key=lambda pc: (pc - root) % 12))
     quality = cs.chordKind or ""
     if "dominant" in quality:
         mode = (0, 2, 4, 5, 7, 9, 10)

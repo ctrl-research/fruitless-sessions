@@ -24,7 +24,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "ruff>=0.6"]
 # Fetching hero neuron meshes from the release's precomputed source.
-meshes = ["cloud-volume>=12"]
+meshes = ["cloud-volume>=12", "pyfqmr>=0.2"]
 
 [project.scripts]
 fruitless = "fruitless.cli:main"

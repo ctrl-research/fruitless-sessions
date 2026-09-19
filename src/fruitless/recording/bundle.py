@@ -137,6 +137,23 @@ def default_stage_dir() -> Path:
     return paths.ROOT / "stage" / "public" / "takes"
 
 
+def write_index(stage_takes: Path) -> list[dict]:
+    """List every bundle under the stage's takes directory for the page's dropdown."""
+    stage_takes = Path(stage_takes)
+    entries = []
+    for d in sorted(p for p in stage_takes.iterdir() if (p / "take.json").is_file()):
+        m = json.loads((d / "take.json").read_text())
+        entries.append({
+            "name": m["name"], "path": d.name, "duration_s": m.get("duration_s", 0),
+            "roles": [f["role"] for f in m.get("flies", [])],
+            "iterations": m.get("iterations", 1),
+            "tune": (m.get("tune") or {}).get("name"),
+            "audio": bool(m.get("audio")),
+        })
+    (stage_takes / "index.json").write_text(json.dumps(entries, indent=2) + "\n")
+    return entries
+
+
 def flies_from_take_dir(take: Path) -> tuple[list[FlySpec], dict, str | None]:
     """Read a take directory written by `fruitless take` (take.json) or `fruitless smoke`
     (smoke.json) and describe its flies. Returns (flies, extra manifest fields, audio file)."""
@@ -168,10 +185,11 @@ def flies_from_take_dir(take: Path) -> tuple[list[FlySpec], dict, str | None]:
                     extra["mesh_groups"] = list(FLIES[role]().mesh_groups)
             flies.append(FlySpec(role, layers, f.get("circuit", {}), files, extra))
         extra_manifest = {"tune": rep.get("tune"), "seconds_wall": rep.get("seconds_wall"),
-                          "total_spikes": rep.get("total_spikes"), "drive": rep.get("drive")}
+                          "total_spikes": rep.get("total_spikes"), "drive": rep.get("drive"),
+                          "iterations": rep.get("iterations", 1)}
         return flies, extra_manifest, rep.get("audio")
     if (take / "smoke.json").is_file():
         rep = json.loads((take / "smoke.json").read_text())
         layers = {d.name: d for d in take.iterdir() if (d / "activity.json").is_file()}
-        return [FlySpec("smoke", layers, rep.get("circuit", {}))], {"smoke": rep}, None
+        return [FlySpec("smoke", layers, rep.get("circuit", {}))], {"smoke": rep, "iterations": rep.get("iterations", 1)}, None
     raise FileNotFoundError(f"{take}: no take.json or smoke.json")

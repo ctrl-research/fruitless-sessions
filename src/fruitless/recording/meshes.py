@@ -82,8 +82,25 @@ def read_fsm(path: Path) -> tuple[np.ndarray, np.ndarray]:
     return v, f.astype(np.uint32)
 
 
+def decimate(vertices: np.ndarray, faces: np.ndarray, ratio: float) -> tuple[np.ndarray, np.ndarray]:
+    """Quadric edge collapse to about `ratio` of the triangles (pyfqmr). Returns inputs
+    unchanged when ratio >= 1 or the mesh is already small."""
+    if ratio >= 1.0 or faces.shape[0] < 2000:
+        return vertices, faces
+    try:
+        import pyfqmr
+    except ImportError:  # pragma: no cover
+        return vertices, faces
+    s = pyfqmr.Simplify()
+    s.setMesh(np.asarray(vertices, dtype=np.float64), np.asarray(faces, dtype=np.int64))
+    s.simplify_mesh(target_count=max(1000, int(faces.shape[0] * ratio)), aggressiveness=7,
+                    preserve_border=False, verbose=0)
+    v, f, _ = s.getMesh()
+    return np.asarray(v), np.asarray(f, dtype=np.uint32)
+
+
 def fetch_meshes(bundle: Path, neuron_ids: np.ndarray, indices: np.ndarray, lod: int = 3,
-                 overwrite: bool = False, prune: bool = True) -> dict:
+                 overwrite: bool = False, prune: bool = True, decimate_ratio: float = 0.35) -> dict:
     """Fetch and write the meshes of the given pack indices; returns the index document.
 
     prune removes meshes in the directory that are not in `indices`, so a bundle
@@ -92,9 +109,9 @@ def fetch_meshes(bundle: Path, neuron_ids: np.ndarray, indices: np.ndarray, lod:
     out.mkdir(parents=True, exist_ok=True)
     index_path = out / "index.json"
     doc = json.loads(index_path.read_text()) if index_path.is_file() else {"lod": lod, "voxel_nm": VOXEL_NM, "neurons": {}}
-    if doc.get("format") != "fsm2":
+    if doc.get("format") != "fsm2" or doc.get("decimate") != decimate_ratio:
         # older float32 files: refetch everything
-        doc = {"lod": lod, "voxel_nm": VOXEL_NM, "format": "fsm2", "neurons": {}}
+        doc = {"lod": lod, "voxel_nm": VOXEL_NM, "format": "fsm2", "decimate": decimate_ratio, "neurons": {}}
         for f in out.glob("*.fsm"):
             f.unlink()
     wanted = {str(int(i)) for i in np.unique(np.asarray(indices)).tolist()}
@@ -116,12 +133,14 @@ def fetch_meshes(bundle: Path, neuron_ids: np.ndarray, indices: np.ndarray, lod:
         mesh = got[body] if isinstance(got, dict) else got
         verts = np.asarray(mesh.vertices, dtype=np.float64) / VOXEL_NM   # nm -> voxels
         faces = np.asarray(mesh.faces, dtype=np.uint32)
+        n_raw = faces.shape[0]
+        verts, faces = decimate(verts, faces, decimate_ratio)
         write_fsm(path, verts, faces)
         doc["neurons"][key] = {"bodyId": body, "vertices": int(verts.shape[0]),
                                "triangles": int(faces.shape[0]), "file": f"meshes/{i}.fsm",
                                "bytes": path.stat().st_size}
-        print(f"  mesh {i:7d} bodyId {body:12d}  {verts.shape[0]:7,d} v {faces.shape[0]:8,d} t  "
-              f"{time.perf_counter() - t:.1f}s", file=sys.stderr)
+        print(f"  mesh {i:7d} bodyId {body:12d}  {verts.shape[0]:7,d} v {faces.shape[0]:8,d} t "
+              f"(of {n_raw:,d})  {time.perf_counter() - t:.1f}s", file=sys.stderr)
         index_path.write_text(json.dumps(doc, indent=1) + "\n")
     index_path.write_text(json.dumps(doc, indent=1) + "\n")
     return doc
