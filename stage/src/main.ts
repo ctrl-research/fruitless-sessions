@@ -106,7 +106,7 @@ async function main() {
   const bassSeat = seats.get('bass')
   if (seats.has('sax') && bassSeat) {
     const outward = Math.sign(bassSeat.x) || 1
-    seats.set('sax', new THREE.Vector3(bassSeat.x + outward * formationR * 0.45, 0, bassSeat.z + formationR * 0.8))   // forward of the bassist, a little to the outside
+    seats.set('sax', new THREE.Vector3(bassSeat.x + outward * formationR * 0.15, 0, bassSeat.z + formationR * 0.8))   // forward of the bassist, just to the outside
   }
   // the disc reaches just past the furthest seat, so a performer stepped forward still stands on it
   const reach = Math.max(formationR, ...[...seats.values()].map(v => Math.hypot(v.x, v.z)))
@@ -152,7 +152,12 @@ async function main() {
     // brain floats above its fly; brains are wider than the seats are apart, so they fan out
     // from the platform centre just enough not to touch
     const fanX = n > 1 ? seat.x * (Math.max(1, (R * 1.45) / Math.max(1e-6, formationR)) - 1) : 0
-    points.object.position.set(-points.center.x + fanX, -points.center.y + R * 0.9, -points.center.z)
+    // brains of performers standing forward hang a little lower, so a front and a back brain
+    // do not stack in the view
+    const zs = [...seats.values()].map(v => v.z)
+    const zMin = Math.min(...zs), zMax = Math.max(...zs)
+    const forwardness = zMax > zMin ? (seat.z - zMin) / (zMax - zMin) : 0
+    points.object.position.set(-points.center.x + fanX, -points.center.y + R * (0.9 - 0.1 * forwardness), -points.center.z)
     group.add(points.object)
     const meshes = new HeroMeshes(base)
     meshes.group.position.copy(points.object.position)
