@@ -56,41 +56,60 @@ export class Score {
     return ns.filter(n => n.t <= t && t < n.t + n.dur)
   }
 
-  /** Draw form sections and note density onto a canvas the width of the transport. */
+  /** Draw the form across the top and one lane of notes per band member below it. */
   drawStrip(canvas: HTMLCanvasElement, t: number): void {
     const ctx = canvas.getContext('2d')!
-    const w = canvas.width = canvas.clientWidth * devicePixelRatio
-    const h = canvas.height = canvas.clientHeight * devicePixelRatio
+    const dpr = devicePixelRatio
+    const w = canvas.width = canvas.clientWidth * dpr
+    const h = canvas.height = canvas.clientHeight * dpr
     ctx.clearRect(0, 0, w, h)
     const dur = this.tune.duration_s
     const x = (s: number) => (s / dur) * w
+    const headerH = 16 * dpr
+    const roles = Object.keys(this.notes)
+    const laneH = roles.length ? (h - headerH) / roles.length : 0
     // sections
     let bar = 0
     const colors: Record<string, string> = { head: '#2a2438', solo: '#1f2f3a', trade: '#3a2a1f', free: '#1f3a2a' }
     for (const s of this.tune.form) {
       const x0 = x(bar * this.barS), x1 = x((bar + s.bars) * this.barS)
       ctx.fillStyle = colors[s.kind] ?? '#222'
-      ctx.fillRect(x0, 0, x1 - x0, h)
+      ctx.fillRect(x0, 0, x1 - x0, headerH)
+      ctx.fillStyle = (colors[s.kind] ?? '#222') + '66'
+      ctx.fillRect(x0, headerH, x1 - x0, h - headerH)
       ctx.fillStyle = '#8a8a96'
-      ctx.font = `${10 * devicePixelRatio}px system-ui`
-      ctx.fillText(s.kind + (s.who.length ? ' ' + s.who.join('/') : ''), x0 + 4 * devicePixelRatio, 11 * devicePixelRatio)
+      ctx.font = `${10 * dpr}px system-ui`
+      ctx.fillText(s.kind + (s.who.length && s.kind !== 'free' ? ' ' + s.who.join('/') : ''), x0 + 4 * dpr, 11 * dpr)
       bar += s.bars
     }
     // bar lines
     ctx.strokeStyle = '#2c2c38'
-    for (let b = 0; b * this.barS < dur; b++) { const xb = x(b * this.barS); ctx.beginPath(); ctx.moveTo(xb, h * 0.35); ctx.lineTo(xb, h); ctx.stroke() }
-    // notes as small marks, pitch on y
-    for (const [role, ns] of Object.entries(this.notes)) {
-      ctx.fillStyle = role === 'sax' ? '#f2b35c' : '#7fb3d5'
+    for (let b = 0; b * this.barS < dur; b++) { const xb = x(b * this.barS); ctx.beginPath(); ctx.moveTo(xb, headerH); ctx.lineTo(xb, h); ctx.stroke() }
+    // one lane per role: label at the left, notes by pitch within the lane
+    const laneColor: Record<string, string> = { sax: '#f2b35c', bass: '#7fb3d5', drums: '#c98ad6', piano: '#8fd6a8' }
+    roles.forEach((role, ri) => {
+      const y0 = headerH + ri * laneH
+      ctx.strokeStyle = '#1b1b24'
+      ctx.beginPath(); ctx.moveTo(0, y0); ctx.lineTo(w, y0); ctx.stroke()
+      ctx.fillStyle = 'rgba(7,7,11,0.7)'
+      ctx.fillRect(0, y0 + 2 * dpr, 44 * dpr, laneH - 4 * dpr)
+      ctx.fillStyle = laneColor[role] ?? '#ccc'
+      ctx.font = `${10 * dpr}px system-ui`
+      ctx.fillText(role, 5 * dpr, y0 + laneH / 2 + 3.5 * dpr)
+      const ns = this.notes[role]
+      const pitches = ns.map(n => n.midi)
+      const lo = Math.min(...pitches, 127), hi = Math.max(...pitches, 0)
+      const span = Math.max(1, hi - lo)
+      const pad = 3 * dpr
       for (const n of ns) {
-        const y = h - ((n.midi - 48) / 40) * (h * 0.6) - h * 0.05
+        const y = y0 + laneH - pad - ((n.midi - lo) / span) * (laneH - 2 * pad)
         ctx.globalAlpha = 0.35 + 0.65 * (n.vel / 127)
-        ctx.fillRect(x(n.t), y, Math.max(1.5 * devicePixelRatio, x(n.dur)), 2 * devicePixelRatio)
+        ctx.fillRect(x(n.t), y - dpr, Math.max(1.5 * dpr, x(n.dur)), 2 * dpr)
       }
       ctx.globalAlpha = 1
-    }
+    })
     // playhead
     ctx.fillStyle = '#e8e6e1'
-    ctx.fillRect(x(t) - devicePixelRatio, 0, 2 * devicePixelRatio, h)
+    ctx.fillRect(x(t) - dpr, 0, 2 * dpr, h)
   }
 }

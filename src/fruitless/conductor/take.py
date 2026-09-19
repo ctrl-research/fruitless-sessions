@@ -25,12 +25,13 @@ import numpy as np
 
 from fruitless import paths
 from fruitless.conductor.mapper import SaxMapper
-from fruitless.conductor.mappers import BassMapper, DrumsMapper
+from fruitless.conductor.mappers import BassMapper, DrumsMapper, PianoMapper, key_from_bump
 from fruitless.conductor.midi import write_midi, write_notes_json
-from fruitless.conductor.tune import Tune, load_tune
+from fruitless.conductor.tune import Tune, chord_pitch_classes, load_tune
 from fruitless.flies.base import Fly
 from fruitless.flies.bass import TRIPOD_A, TRIPOD_B, Bass
 from fruitless.flies.drums import Drums
+from fruitless.flies.piano import Piano
 from fruitless.flies.sax import Sax
 from fruitless.flies.select import Resolver
 from fruitless.recording.activity import ActivityWriter
@@ -46,8 +47,14 @@ POOL_HZ = 60.0         # bass: premotor pool of the stepping tripod
 POOL_OFF_HZ = 4.0      # bass: the other tripod
 DNA02_HZ = 70.0        # drums: steady steering drive
 COUPLE_HZ = 80.0       # ear rate at coupling gain 1 and full intensity
-FLIES = {"sax": Sax, "bass": Bass, "drums": Drums}
-MAPPERS = {"sax": SaxMapper, "bass": BassMapper, "drums": DrumsMapper}
+EPG_KEY_HZ = 60.0      # piano: the chord root's wedge
+EPG_BG_HZ = 6.0        # piano: the other wedges
+PEN_DRIFT_HZ = 40.0    # piano, free style: ear imbalance pushes PEN_a left or right
+PAM_REWARD_HZ = 50.0   # mushroom body: reward when the soloist lands a chord tone on a beat
+PPL1_PUNISH_HZ = 50.0  # punishment when it lands a clash
+FLIES = {"sax": Sax, "bass": Bass, "drums": Drums, "piano": Piano}
+MAPPERS = {"sax": SaxMapper, "bass": BassMapper, "drums": DrumsMapper, "piano": PianoMapper}
+NAMES = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
 
 
 def _set_rate(fly: Fly, rates: np.ndarray, pos: dict[int, int], group: str, hz: float) -> None:
@@ -110,7 +117,7 @@ def write_outputs(out: Path, tune: Tune, flies: dict[str, Fly], mappers: dict, s
         print(f"{role}: {len(notes)} notes", file=sys.stderr)
     audio = None
     if render_audio and tracks:
-        mixed = synth.mix(tracks, gains={"sax": 1.0, "bass": 0.9, "drums": 0.7})
+        mixed = synth.mix(tracks, gains={"sax": 1.0, "bass": 0.9, "drums": 0.7, "piano": 0.75})
         synth.write_wav(out / "mix.wav", mixed)
         enc = synth.encode(out / "mix.wav", out / "mix")
         audio = enc.name if enc else "mix.wav"
@@ -186,11 +193,31 @@ def run_take(tune_path: Path, out: Path, seed: int = 0, pack_dir: Path = paths.P
     t_wall = time.perf_counter()
     total_spikes = 0
     last_readouts: dict[str, dict[str, float]] = {}
+    free_keys: list[str | None] = []
     for step in range(tune.total_steps):
         sec, _ = tune.section_at(step)
         beat_step = step % tune.steps_per_beat
         beat = (step % tune.steps_per_bar) // tune.steps_per_beat
         new_readouts: dict[str, dict[str, float]] = {}
+        # consonance of the soloist's most recent note against the chord, for the mushroom body
+        consonance: dict[str, str | None] = {"verdict": None}
+        soloist = tune.soloist_at(step)
+        chord_now = tune.chord_at(step)
+        if soloist in mappers and chord_now is not None and beat_step == 0:
+            last = getattr(mappers[soloist], "_open", None) or (mappers[soloist].notes[-1] if mappers[soloist].notes else None)
+            if last is not None and step - last.step <= tune.steps_per_beat:
+                tones, scale = chord_pitch_classes(chord_now, tune.key)
+                pc = last.midi % 12
+                consonance["verdict"] = "reward" if pc in tones else ("punish" if pc not in scale else None)
+        # free style: the piano's bump names the key at every bar line; the tune's key seeds bar 1
+        if tune.free_style and step == 0:
+            tune.free_chord = f"{tune.key}7"
+        if tune.free_style and "piano" in last_readouts and step % tune.steps_per_bar == 0 and step > 0:
+            pr = last_readouts["piano"]
+            if pr.get("bump_mag", 0.0) > 0.1 and pr.get("epg_hz", 0.0) > 1.0:
+                tune.free_chord = f"{NAMES[key_from_bump(pr['bump_deg'])]}7"
+        if step % tune.steps_per_bar == 0:
+            free_keys.append(tune.free_chord if tune.free_style else None)   # after this bar's key is set
         for role, fly in flies.items():
             s = sessions[role]
             rates = np.zeros((1, s.drivable.size))
@@ -201,7 +228,7 @@ def run_take(tune_path: Path, out: Path, seed: int = 0, pack_dir: Path = paths.P
             if role == "sax":
                 if sec.kind == "head":
                     rate = PC1_NOTE_HZ if tune.melody_at(step) is not None else PC1_REST_HZ
-                elif sec.kind == "solo" and tune.soloist_at(step) == role:
+                elif sec.kind in ("solo", "free") and tune.soloist_at(step) == role:
                     rate = PC1_SOLO_HZ
                 else:
                     rate = PC1_REST_HZ
@@ -215,6 +242,29 @@ def run_take(tune_path: Path, out: Path, seed: int = 0, pack_dir: Path = paths.P
                     set_rate(f"pool_{leg}", POOL_HZ if (leg in stepping and on) else POOL_OFF_HZ)
             elif role == "drums":
                 set_rate("DNa02", DNA02_HZ)
+            elif role == "piano":
+                chord = tune.chord_at(step)
+                if chord is not None and tune.chart:
+                    root = chord_pitch_classes(chord, tune.key)[0][0]
+                    key_wedge = Piano.wedge_for_pitch_class(root)
+                    for w in range(1, 9):
+                        set_rate(f"epg_w{w}", EPG_KEY_HZ if w == key_wedge else EPG_BG_HZ)
+                else:
+                    # free style: no landmark. The ring is held on the key it named last bar
+                    # (a weaker drive than a chart gives) while the ear imbalance pushes PEN_a
+                    # left or right, so the key can wander from bar to bar.
+                    cur = tune.free_chord or f"{tune.key}7"
+                    cur_wedge = Piano.wedge_for_pitch_class(chord_pitch_classes(cur, tune.key)[0][0])
+                    for w in range(1, 9):
+                        set_rate(f"epg_w{w}", EPG_KEY_HZ * 0.55 if w == cur_wedge else EPG_BG_HZ * 2)
+                    ca, cb = heard(tune, role, last_readouts)
+                    bal = (ca - cb) / max(1.0, ca + cb)
+                    set_rate("pen_a_L", PEN_DRIFT_HZ * max(0.0, bal))
+                    set_rate("pen_a_R", PEN_DRIFT_HZ * max(0.0, -bal))
+                # mushroom body teaching signal from what the soloist just played
+                verdict = consonance.get("verdict")
+                set_rate("PAM", PAM_REWARD_HZ if verdict == "reward" else 0.0)
+                set_rate("PPL1", PPL1_PUNISH_HZ if verdict == "punish" else 0.0)
 
             # ears: the head (for everyone, in head sections) plus what the others played last step
             a_hz, b_hz = ear_rates(tune, step, 0, 0)
@@ -256,6 +306,7 @@ def run_take(tune_path: Path, out: Path, seed: int = 0, pack_dir: Path = paths.P
             "free_style": tune.free_style,
         },
         "seed": seed,
+        "free_keys": free_keys if tune.free_style else None,
         "seconds_bio": tune.duration_s,
         "seconds_wall": round(wall, 1),
         "total_spikes": total_spikes,
@@ -263,7 +314,8 @@ def run_take(tune_path: Path, out: Path, seed: int = 0, pack_dir: Path = paths.P
         "flies": manifest_flies,
         "drive": {"pc1_note_hz": PC1_NOTE_HZ, "pc1_rest_hz": PC1_REST_HZ, "pc1_solo_hz": PC1_SOLO_HZ,
                   "ear_hz": EAR_HZ, "pool_hz": POOL_HZ, "pool_off_hz": POOL_OFF_HZ, "dna02_hz": DNA02_HZ,
-                  "couple_hz": COUPLE_HZ, "coupling": tune.coupling},
+                  "couple_hz": COUPLE_HZ, "coupling": tune.coupling, "epg_key_hz": EPG_KEY_HZ,
+                  "pen_drift_hz": PEN_DRIFT_HZ, "pam_reward_hz": PAM_REWARD_HZ, "ppl1_punish_hz": PPL1_PUNISH_HZ},
     }
     (out / "take.json").write_text(json.dumps(report, indent=2) + "\n")
     return report

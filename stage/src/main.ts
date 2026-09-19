@@ -9,7 +9,7 @@ import { AudioClock } from './clock'
 import { Score, type TuneInfo, type NoteEvent } from './score'
 import { FlyBody, idlePose } from './body/fly'
 import { rigFor } from './body/rig'
-import { drumKit, saxophone, upright } from './body/instruments'
+import { drumKit, piano, saxophone, upright } from './body/instruments'
 
 const params = new URLSearchParams(location.search)
 const takeName = params.get('take') ?? 'smoke'
@@ -90,18 +90,27 @@ async function main() {
   // rhythm section toward the back, soloists toward the front. Brains float above each fly.
   const n = flies.length
   const formationR = n === 1 ? 0 : R * (0.4 + 0.22 * n)
-  const backRole = (r: string) => r === 'drums' ? 0 : r === 'bass' ? 1 : 2      // drums at the back
-  const ordered = [...flies].sort((a, b) => backRole(a.entry.role) - backRole(b.entry.role))
+  // seats on the back half-circle, rhythm section first (drums back centre, then piano and
+  // bass alternating left and right), with the sides stepped toward the audience. The sax then
+  // takes the outer side of the bassist at the same depth.
   const seats = new Map<string, THREE.Vector3>()
+  const backRole = (r: string) => r === 'drums' ? 0 : r === 'piano' ? 1 : r === 'bass' ? 2 : 3
+  const ordered = [...flies].sort((a, b) => backRole(a.entry.role) - backRole(b.entry.role))
   ordered.forEach((f, i) => {
-    // spread around the back half-circle, back-centre first, then alternating left/right
     const k = i === 0 ? 0 : (i % 2 === 1 ? -1 : 1) * Math.ceil(i / 2)
-    const ang = Math.PI / 2 + k * (Math.PI / Math.max(2, n)) * 1.15 + (i % 2 ? 0.08 : -0.06)   // organic offsets
+    const ang = Math.PI / 2 + k * (Math.PI / Math.max(2, n)) * 1.15 + (i % 2 ? 0.08 : -0.06)
     const rr = formationR * (i === 0 ? 1.0 : 0.9 + 0.05 * (i % 2))
-    const forward = i === 0 ? 0 : formationR * 0.3          // the sides step toward the audience
+    const forward = i === 0 ? 0 : formationR * 0.3
     seats.set(f.entry.role, new THREE.Vector3(Math.cos(ang) * rr, 0, -Math.sin(ang) * rr + formationR * 0.3 + forward))
   })
-  const platformR = formationR + bodyScale * 1.2   // keeps the disc about the size it was before the seats spread
+  const bassSeat = seats.get('bass')
+  if (seats.has('sax') && bassSeat) {
+    const outward = Math.sign(bassSeat.x) || 1
+    seats.set('sax', new THREE.Vector3(bassSeat.x + outward * formationR * 0.15, 0, bassSeat.z + formationR * 0.5))   // forward of the bassist, just to the outside
+  }
+  // the disc reaches just past the furthest seat, so a performer stepped forward still stands on it
+  const reach = Math.max(formationR, ...[...seats.values()].map(v => Math.hypot(v.x, v.z)))
+  const platformR = reach + bodyScale * 1.6
   const platform = new THREE.Mesh(
     new THREE.CylinderGeometry(platformR, platformR * 1.04, bodyScale * 0.35, 64),
     new THREE.MeshStandardMaterial({ color: 0x1a1a24, roughness: 0.85, metalness: 0.1 }),
@@ -140,20 +149,34 @@ async function main() {
     group.position.copy(seat)
     scene.add(group)
     const points = fi === 0 ? proto : new BrainPoints(take.somaXyz, take.superclass, take.manifest.shared.superclass_legend)
-    // brain floats above its fly; brains are wider than the seats are apart, so they fan out
-    // from the platform centre just enough not to touch
+    // brains are wider than the seats are apart, so they fan out from the platform centre
+    // just enough not to touch; performers standing forward hang theirs very slightly lower
     const fanX = n > 1 ? seat.x * (Math.max(1, (R * 1.45) / Math.max(1e-6, formationR)) - 1) : 0
-    points.object.position.set(-points.center.x + fanX, -points.center.y + R * 0.9, -points.center.z)
-    group.add(points.object)
+    const zs = [...seats.values()].map(v => v.z)
+    const zMin = Math.min(...zs), zMax = Math.max(...zs)
+    const forwardness = zMax > zMin ? (seat.z - zMin) / (zMax - zMin) : 0
+    const yaw = Math.atan2(-seat.x, Math.abs(seat.z) + formationR) * 0.6 + 0.35
+    // the brain floats above its fly in the fly's own orientation: laid flat, dorsal side up,
+    // brain at the head end pointing where the fly faces, nerve cord trailing behind
+    const holder = new THREE.Group()
+    holder.position.set(fanX, R * (0.95 - 0.1 * forwardness), 0)
+    holder.rotation.y = yaw
+    holder.scale.setScalar(0.72)        // face-on brains are wide; a little smaller keeps neighbours apart
+    const tilt = new THREE.Group()
+    tilt.rotation.x = Math.PI / 2       // the point cloud is built body-axis-vertical; this lays it flat
+    holder.add(tilt)
     const meshes = new HeroMeshes(base)
+    points.object.position.set(-points.center.x, -points.center.y, -points.center.z)
     meshes.group.position.copy(points.object.position)
-    group.add(meshes.group)
+    tilt.add(points.object, meshes.group)
+    group.add(holder)
     brainGroups.push(points.object, meshes.group)
     const stand = new THREE.Group()
     stand.position.set(0, -R * 0.35, 0)
     const performer = new THREE.Group()
-    // face the audience (+Z), turned a little toward the centre of the platform
-    performer.rotation.y = Math.atan2(-seat.x, Math.abs(seat.z) + formationR) * 0.6 + 0.35
+    // face the audience (+Z), turned a little toward the centre of the platform; the piano
+    // sits side-on like a real stage piano so the pianist is seen in profile at the keys
+    performer.rotation.y = yaw
     stand.add(performer)
     const body = new FlyBody(bodyScale)
     performer.add(body.group)
@@ -164,6 +187,8 @@ async function main() {
       const b = upright(bodyScale); b.position.set(bodyScale * 0.6, 0, bodyScale * 0.4); performer.add(b)
     } else if (f.entry.role === 'drums') {
       const kit = drumKit(bodyScale); kit.group.position.set(0, 0, bodyScale * 0.9); performer.add(kit.group); kitHits = kit.hits
+    } else if (f.entry.role === 'piano') {
+      const pf = piano(bodyScale); pf.position.set(0, 0, bodyScale * 0.35); performer.add(pf)
     }
     group.add(stand)
     const heroIds = f.layers['hero'] ? await f.layers['hero'].subset : null
@@ -203,7 +228,7 @@ async function main() {
   const controls = new OrbitControls(camera, canvas)
   controls.enableDamping = true
   controls.autoRotate = false
-  const lookAt = new THREE.Vector3(0, R * 0.7, 0)
+  const lookAt = new THREE.Vector3(0, R * 0.45, 0)
   controls.target.copy(lookAt)
   let userMoved = false
   controls.addEventListener('start', () => { userMoved = true })
@@ -217,12 +242,12 @@ async function main() {
     // back off until the bandstand's half-width fits the horizontal half-angle of the lens,
     // with margin; re-framed on every resize until the user takes the camera
     // fit both the band's width and the platform-to-brain height, whichever needs more distance
-    const halfWidth = (Math.max(formationR, R * 1.45) + R * 1.0) * 1.1
-    const halfHeight = R * 1.15 * 1.1          // platform at -0.35R, brain tops near +1.9R, centred on the look-at
+    const halfWidth = (Math.max(reach, R * 1.45) + R * 1.0) * 1.1
+    const halfHeight = R * 1.0 * 1.1           // platform at -0.35R, flat brains top out near +1.3R
     const tanV = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))
-    camDist = Math.max(halfWidth / (tanV * camera.aspect), halfHeight / tanV) * 1.15 + formationR * 0.3
+    camDist = Math.max(halfWidth / (tanV * camera.aspect), halfHeight / tanV) * 1.15 + formationR * 0.6   // the front pair stands forward of the centre
     if (!userMoved) {
-      camera.position.set(controls.target.x, R * 0.95, camDist)
+      camera.position.set(controls.target.x, R * 0.8, camDist)
       camera.lookAt(controls.target)
     }
   }
@@ -272,6 +297,7 @@ async function main() {
   const strip = document.getElementById('score') as HTMLCanvasElement
   const nowEl = document.getElementById('now')!
   if (!score) strip.style.display = 'none'
+  else strip.style.height = `${16 + 22 * Math.max(1, Object.keys(notesByRole).length)}px`
   showPanels(performers[focus])
 
   transport.addSeekListener(() => {
@@ -283,7 +309,7 @@ async function main() {
   function soloistIndex(t: number): number {
     if (!score) return 0
     const sec = score.sectionAt(t)
-    const who = sec?.kind === 'head' ? 'sax' : sec?.who?.[0]
+    const who = sec?.kind === 'head' || sec?.kind === 'free' ? 'sax' : sec?.who?.[0]
     const i = performers.findIndex(pf => pf.entry.role === who)
     return i < 0 ? 0 : i
   }
@@ -364,12 +390,14 @@ async function main() {
       score.drawStrip(strip, tNow)
       const sec = score.sectionAt(tNow)
       const sounding = performers.flatMap(pf => pf.notes.filter(n => n.t <= tNow && tNow < n.t + n.dur).map(n => `${pf.entry.role[0]}:${noteName(n.midi)}`))
-      nowEl.textContent = `bar ${score.barAt(tNow) + 1} · ${score.chordAt(tNow) || '–'} · ${sec ? sec.kind + (sec.who.length ? ' ' + sec.who.join('/') : '') : ''}` +
+      const freeKeys = (take.manifest as unknown as { free_keys?: (string | null)[] }).free_keys
+      const chordLabel = score.chordAt(tNow) || (freeKeys ? (freeKeys[score.barAt(tNow)] ?? 'finding the key…') + ' (from the ring)' : '–')
+      nowEl.textContent = `bar ${score.barAt(tNow) + 1} · ${chordLabel} · ${sec ? sec.kind + (sec.who.length && sec.kind !== 'free' ? ' ' + sec.who.join('/') : '') : ''}` +
         (sounding.length ? ` · ♪ ${sounding.slice(0, 6).join(' ')}` : '')
     }
     // camera pans (not pivots) toward the soloist until the user takes over
     const pfx = performers[focus].group.position.x
-    camTarget.set(pfx * 0.2, R * 0.7, 0)
+    camTarget.set(pfx * 0.2, R * 0.45, 0)
     if (!userMoved) {
       const kcam = 1 - Math.exp(-dt * 1.5)
       const dx = (camTarget.x - controls.target.x) * kcam

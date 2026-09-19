@@ -127,3 +127,32 @@ export function riser(radius: number): THREE.Mesh {
   m.position.y = -radius * 0.06
   return m
 }
+
+/** A small upright piano: case, keyboard with white and black keys, and a lid. The fly stands
+ *  behind the keyboard facing the audience. */
+export function piano(scale = 1): THREE.Group {
+  const g = new THREE.Group()
+  const CASE = new THREE.MeshStandardMaterial({ color: 0x1c1a1f, roughness: 0.35, metalness: 0.2 })
+  const body = new THREE.Mesh(new THREE.BoxGeometry(2.6 * scale, 1.5 * scale, 0.9 * scale), CASE)
+  body.position.set(0, 0.75 * scale, 1.25 * scale)
+  g.add(body)
+  const shelf = new THREE.Mesh(new THREE.BoxGeometry(2.6 * scale, 0.12 * scale, 0.5 * scale), CASE)
+  shelf.position.set(0, 1.05 * scale, 0.75 * scale)
+  g.add(shelf)
+  const nWhite = 15
+  const kw = (2.4 * scale) / nWhite
+  for (let i = 0; i < nWhite; i++) {
+    const k = new THREE.Mesh(new THREE.BoxGeometry(kw * 0.92, 0.06 * scale, 0.42 * scale), SKIN)
+    k.position.set(-1.2 * scale + kw * (i + 0.5), 1.14 * scale, 0.72 * scale)
+    g.add(k)
+    if ([0, 1, 3, 4, 5].includes(i % 7)) {
+      const b = new THREE.Mesh(new THREE.BoxGeometry(kw * 0.55, 0.08 * scale, 0.26 * scale), DARK)
+      b.position.set(-1.2 * scale + kw * (i + 1.0), 1.19 * scale, 0.62 * scale)
+      g.add(b)
+    }
+  }
+  const lid = new THREE.Mesh(new THREE.BoxGeometry(2.6 * scale, 0.08 * scale, 0.95 * scale), CASE)
+  lid.position.set(0, 1.55 * scale, 1.2 * scale)
+  g.add(lid)
+  return g
+}

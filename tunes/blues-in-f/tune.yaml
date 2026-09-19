@@ -17,9 +17,10 @@ chart:
   - [F7, "", "", ""]
   - [C7, "", "", ""]
 melody: head.abc
-roles: [sax, bass, drums]
+roles: [sax, bass, drums, piano]
 coupling:          # who hears whom, gain 0..1 (keep modest: loud input startles the giant fiber)
-  sax:   {bass: 0.3, drums: 0.3}
-  bass:  {sax: 0.4, drums: 0.5}
-  drums: {sax: 0.4, bass: 0.5}
+  sax:   {bass: 0.3, drums: 0.3, piano: 0.3}
+  bass:  {sax: 0.4, drums: 0.5, piano: 0.2}
+  drums: {sax: 0.4, bass: 0.5, piano: 0.2}
+  piano: {sax: 0.5, bass: 0.3, drums: 0.2}
 free_style: false

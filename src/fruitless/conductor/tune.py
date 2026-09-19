@@ -40,6 +40,7 @@ class Tune:
     free_style: bool
     melody: list[tuple[float, float, int]] = field(default_factory=list)  # (start_beat, dur_beats, midi)
     source_dir: Path | None = None
+    free_chord: str | None = None     # set by the conductor in free style (from the piano's bump)
 
     # ------------------------------------------------------------ timing
     @property
@@ -99,11 +100,13 @@ class Tune:
             return sec.who[0]
         if sec.kind == "trade" and sec.who:
             return sec.who[(bar // max(1, sec.trade_bars)) % len(sec.who)]
+        if sec.kind == "free":
+            return "sax" if "sax" in self.roles else None    # everyone plays; the sax carries the line
         return None
 
     def chord_at(self, step: int) -> str | None:
         if not self.chart:
-            return None
+            return self.free_chord
         bar = (step // self.steps_per_bar) % self.chorus_bars
         beat = (step % self.steps_per_bar) // self.steps_per_beat
         row = self.chart[bar]
@@ -179,10 +182,11 @@ def _parse_form(items: list, roles: list[str]) -> list[Section]:
         if isinstance(it, str):
             if it == "head":
                 out.append(Section("head", (), 0))
+            elif it.startswith("free"):
+                bars = int(it.split(":", 1)[1]) if ":" in it else 0
+                out.append(Section("free", tuple(roles), bars))
             elif it.startswith("solo:"):
                 out.append(Section("solo", (it.split(":", 1)[1],), 0))
-            elif it == "free":
-                out.append(Section("free", tuple(roles), 0))
             else:
                 raise ValueError(f"unknown form item {it!r}")
         elif isinstance(it, dict):

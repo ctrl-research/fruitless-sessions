@@ -33,7 +33,7 @@ main { position: relative; min-height: 0; }
 .motor .v { color: var(--accent); font-variant-numeric: tabular-nums; }
 .now { position: absolute; left: 50%; transform: translateX(-50%); bottom: 12px; color: var(--fg); font-size: 14px;
   background: rgba(10,10,16,0.6); padding: 4px 10px; border-radius: 4px; }
-.score { width: 100%; height: 56px; display: block; border-top: 1px solid #16161e; }
+.score { width: 100%; height: 56px; display: block; border-top: 1px solid #16161e; }   /* height set per role count */
 
 .rig { position: absolute; left: 12px; top: 150px; width: 260px; max-height: 45%; overflow: auto; background: rgba(10,10,16,0.7);
   border: 1px solid #23232e; border-radius: 6px; padding: 8px 10px; font-size: 11px; backdrop-filter: blur(6px); color: var(--dim); }

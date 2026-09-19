@@ -186,7 +186,7 @@ def flies_from_take_dir(take: Path) -> tuple[list[FlySpec], dict, str | None]:
             flies.append(FlySpec(role, layers, f.get("circuit", {}), files, extra))
         extra_manifest = {"tune": rep.get("tune"), "seconds_wall": rep.get("seconds_wall"),
                           "total_spikes": rep.get("total_spikes"), "drive": rep.get("drive"),
-                          "iterations": rep.get("iterations", 1)}
+                          "iterations": rep.get("iterations", 1), "free_keys": rep.get("free_keys")}
         return flies, extra_manifest, rep.get("audio")
     if (take / "smoke.json").is_file():
         rep = json.loads((take / "smoke.json").read_text())

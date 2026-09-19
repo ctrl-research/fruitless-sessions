@@ -100,7 +100,7 @@ class SaxMapper:
                 self._close(t)
             return
 
-        if sec.kind == "solo" and tune.soloist_at(step) == self.role:
+        if sec.kind in ("solo", "free") and tune.soloist_at(step) == self.role:
             chord = tune.chord_at(step)
             if not song_on or chord is None:
                 self._close(t)
