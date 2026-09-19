@@ -8,14 +8,21 @@ export interface MeshIndex {
   neurons: Record<string, { bodyId: number; vertices: number; triangles: number; file: string }>
 }
 
-const MAGIC = 0x314d5346 // "FSM1"
+const MAGIC = 0x324d5346 // "FSM2"
 
-export function decodeFsm(buf: ArrayBuffer): { positions: Float32Array; indices: Uint32Array } {
+/** FSM2: 16-bit positions quantized into the neuron's bounding box, uint16 or uint32 indices. */
+export function decodeFsm(buf: ArrayBuffer): { positions: Float32Array; indices: Uint32Array | Uint16Array } {
   const dv = new DataView(buf)
-  if (dv.getUint32(0, true) !== MAGIC) throw new Error('not an FSM1 mesh')
-  const nv = dv.getUint32(4, true), nf = dv.getUint32(8, true)
-  const positions = new Float32Array(buf.slice(12, 12 + 12 * nv))
-  const indices = new Uint32Array(buf.slice(12 + 12 * nv, 12 + 12 * nv + 12 * nf))
+  if (dv.getUint32(0, true) !== MAGIC) throw new Error('not an FSM2 mesh')
+  const nv = dv.getUint32(4, true), nf = dv.getUint32(8, true), flags = dv.getUint32(12, true)
+  const lo = [dv.getFloat32(16, true), dv.getFloat32(20, true), dv.getFloat32(24, true)]
+  const size = [dv.getFloat32(28, true), dv.getFloat32(32, true), dv.getFloat32(36, true)]
+  let o = 40
+  const q = new Uint16Array(buf.slice(o, o + 6 * nv))
+  o += 6 * nv
+  const positions = new Float32Array(3 * nv)
+  for (let i = 0; i < 3 * nv; i++) positions[i] = (q[i] / 65535) * size[i % 3] + lo[i % 3]
+  const indices = flags & 1 ? new Uint32Array(buf.slice(o, o + 12 * nf)) : new Uint16Array(buf.slice(o, o + 6 * nf))
   return { positions, indices }
 }
 

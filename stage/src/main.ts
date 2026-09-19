@@ -5,6 +5,8 @@ import { loadTake } from './bundle'
 import { BrainPoints } from './brain/points'
 import { HeroMeshes, type MeshIndex } from './brain/meshes'
 import { Transport } from './transport'
+import { AudioClock } from './clock'
+import { Score, type TuneInfo, type NoteEvent } from './score'
 
 const params = new URLSearchParams(location.search)
 const takeName = params.get('take') ?? 'smoke'
@@ -73,7 +75,32 @@ async function main() {
   resize()
 
   // ---------------------------------------------------------------- transport
-  const transport = new Transport(soma.durationS, document.getElementById('transport')!)
+  const duration = take.manifest.duration_s || soma.durationS
+  const transport = new Transport(duration, document.getElementById('transport')!)
+  const audioSrc = take.manifest.audio ? `${base}/${take.manifest.audio}` : null
+  const clock = new AudioClock(transport, audioSrc)
+  ;(window as unknown as { __fs: unknown }).__fs = { transport, clock, take }
+
+  // score: tune, notes per role, motor readouts
+  const tuneInfo = (take.manifest as unknown as { tune?: TuneInfo }).tune ?? null
+  const notesByRole: Record<string, NoteEvent[]> = {}
+  const motorByRole: Record<string, { names: string[]; steps: number; data: Float32Array }> = {}
+  for (const f of take.manifest.flies as unknown as { role: string; notes?: string; motor?: { file: string; names: string[]; steps: number } }[]) {
+    if (f.notes) notesByRole[f.role] = await (await fetch(`${base}/${f.notes}`)).json()
+    if (f.motor) {
+      const buf = await (await fetch(`${base}/${f.motor.file}`)).arrayBuffer()
+      motorByRole[f.role] = { names: f.motor.names, steps: f.motor.steps, data: new Float32Array(buf) }
+    }
+  }
+  const score = tuneInfo ? new Score(tuneInfo, notesByRole) : null
+  const strip = document.getElementById('score') as HTMLCanvasElement
+  const nowEl = document.getElementById('now')!
+  const motorEl = document.getElementById('motor')!
+  const motor = motorByRole[fly.entry.role]
+  if (motor) motorEl.innerHTML = motor.names.map(n => `<div class="m"><span class="name">${n}</span><span class="v">–</span></div>`).join('')
+  else motorEl.style.display = 'none'
+  const motorVals = Array.from(motorEl.querySelectorAll<HTMLElement>('.v'))
+  if (!score) strip.style.display = 'none'
   let lastBin = -1
   let lastHeroBin = -1
 
@@ -95,7 +122,9 @@ async function main() {
   // ---------------------------------------------------------------- loop
   function frame(now: number) {
     const dt = transport.tick(now)
-    const bin = soma.binAt(transport.time)
+    if (clock.audio && transport.playing) transport.sync(clock.time())
+    const tNow = transport.time
+    const bin = soma.binAt(tNow)
     soma.prefetch(bin)
     if (bin !== lastBin) {
       // apply every bin we skipped over since the last frame, so fast playback still shows spikes
@@ -107,7 +136,7 @@ async function main() {
       lastBin = bin
     }
     if (hero && heroIds) {
-      const hb = hero.binAt(transport.time)
+      const hb = hero.binAt(tNow)
       if (hb !== lastHeroBin) {
         // walk every bin since the last frame so a slow frame does not skip spikes
         const from = lastHeroBin < 0 || hb < lastHeroBin ? hb : lastHeroBin + 1
@@ -133,6 +162,17 @@ async function main() {
         lastHeroBin = hb
       }
     }
+    if (score) {
+      score.drawStrip(strip, tNow)
+      const sec = score.sectionAt(tNow)
+      const sounding = score.soundingAt(fly.entry.role, tNow)
+      nowEl.textContent = `bar ${score.barAt(tNow) + 1} · ${score.chordAt(tNow) || '–'} · ${sec ? sec.kind + (sec.who.length ? ' ' + sec.who.join('/') : '') : ''}` +
+        (sounding.length ? ` · ♪ ${sounding.map(n => noteName(n.midi)).join(' ')}` : '')
+    }
+    if (motor && tuneInfo) {
+      const step = Math.min(motor.steps - 1, Math.max(0, Math.floor(tNow / tuneInfo.step_s)))
+      motor.names.forEach((_, i) => { motorVals[i].textContent = motor.data[step * motor.names.length + i].toFixed(1) })
+    }
     points.update(dt)
     heroMeshes.update(dt)
     controls.update()
@@ -141,6 +181,9 @@ async function main() {
   }
   requestAnimationFrame(frame)
 }
+
+const NAMES = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B']
+function noteName(m: number): string { return `${NAMES[m % 12]}${Math.floor(m / 12) - 1}` }
 
 main().catch(err => {
   document.getElementById('status')!.textContent = String(err)

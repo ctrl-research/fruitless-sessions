@@ -15,6 +15,7 @@ export class BrainPoints {
   private base: Float32Array      // resting color per neuron (rgb)
   private color: Float32Array     // live color attribute
   private heat: Float32Array      // 0..1 activity, decays each frame
+  private active = new Set<number>()   // neurons with heat > 0, so update() is O(active) not O(N)
   private hasSoma: Uint8Array
   private colorAttr: THREE.BufferAttribute
   readonly center = new THREE.Vector3()
@@ -73,24 +74,32 @@ export class BrainPoints {
       const i = neuron[k]
       if (i >= this.n) continue
       this.heat[i] = Math.min(1, this.heat[i] + gain * count[k])
+      this.active.add(i)
     }
   }
 
   /** Decay heat and repaint. decayPerSecond ~ 3 gives a ~300 ms glow. */
   update(dtS: number, decayPerSecond = 3): void {
+    if (this.active.size === 0) return
     const d = Math.exp(-decayPerSecond * dtS)
     const b = this.base, c = this.color, h = this.heat
-    for (let i = 0; i < this.n; i++) {
+    for (const i of this.active) {
       const v = h[i] * d
-      h[i] = v < 0.002 ? 0 : v
-      const t = h[i]
+      const t = v < 0.002 ? 0 : v
+      h[i] = t
       // lerp from base toward a hot amber-white
       c[3 * i] = b[3 * i] + (1.0 - b[3 * i]) * t
       c[3 * i + 1] = b[3 * i + 1] + (0.62 - b[3 * i + 1]) * t
       c[3 * i + 2] = b[3 * i + 2] + (0.18 - b[3 * i + 2]) * t
+      if (t === 0) this.active.delete(i)
     }
     this.colorAttr.needsUpdate = true
   }
 
-  clearHeat(): void { this.heat.fill(0) }
+  clearHeat(): void {
+    for (const i of this.active) { this.color[3 * i] = this.base[3 * i]; this.color[3 * i + 1] = this.base[3 * i + 1]; this.color[3 * i + 2] = this.base[3 * i + 2] }
+    this.heat.fill(0)
+    this.active.clear()
+    this.colorAttr.needsUpdate = true
+  }
 }
