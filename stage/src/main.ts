@@ -96,9 +96,10 @@ async function main() {
   ordered.forEach((f, i) => {
     // spread around the back half-circle, back-centre first, then alternating left/right
     const k = i === 0 ? 0 : (i % 2 === 1 ? -1 : 1) * Math.ceil(i / 2)
-    const ang = Math.PI / 2 + k * (Math.PI / Math.max(2, n)) * 0.85 + (i % 2 ? 0.08 : -0.06)   // organic offsets
-    const rr = formationR * (i === 0 ? 1.0 : 0.85 + 0.05 * (i % 2))
-    seats.set(f.entry.role, new THREE.Vector3(Math.cos(ang) * rr, 0, -Math.sin(ang) * rr + formationR * 0.35))
+    const ang = Math.PI / 2 + k * (Math.PI / Math.max(2, n)) * 1.15 + (i % 2 ? 0.08 : -0.06)   // organic offsets
+    const rr = formationR * (i === 0 ? 1.0 : 0.9 + 0.05 * (i % 2))
+    const forward = i === 0 ? 0 : formationR * 0.3          // the sides step toward the audience
+    seats.set(f.entry.role, new THREE.Vector3(Math.cos(ang) * rr, 0, -Math.sin(ang) * rr + formationR * 0.3 + forward))
   })
   const platformR = formationR + bodyScale * 1.2   // keeps the disc about the size it was before the seats spread
   const platform = new THREE.Mesh(
@@ -115,13 +116,13 @@ async function main() {
 
   // the house spotlight: from a ceiling above the platform, straight down, with a visible beam
   const ceilingY = R * 2.6
-  const spot = new THREE.SpotLight(0xfff1d6, 900, ceilingY * 2.2, 0.62, 0.55, 1.4)
+  const spot = new THREE.SpotLight(0xfff1d6, 900, ceilingY * 2.2, 0.72, 0.55, 1.4)
   spot.position.set(0, ceilingY, 0)
   spot.target.position.set(0, -R * 0.35, 0)
   scene.add(spot, spot.target)
   const beamH = ceilingY + R * 0.35
   const beam = new THREE.Mesh(
-    new THREE.ConeGeometry(platformR * 1.05, beamH, 48, 1, true),
+    new THREE.ConeGeometry(platformR * 1.35, beamH, 48, 1, true),
     new THREE.MeshBasicMaterial({ color: 0xfff1d6, transparent: true, opacity: 0.045, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }),
   )
   beam.position.set(0, -R * 0.35 + beamH / 2, 0)
@@ -141,8 +142,8 @@ async function main() {
     const points = fi === 0 ? proto : new BrainPoints(take.somaXyz, take.superclass, take.manifest.shared.superclass_legend)
     // brain floats above its fly; brains are wider than the seats are apart, so they fan out
     // from the platform centre just enough not to touch
-    const fan = seat.clone().multiplyScalar(n > 1 ? Math.max(1, (R * 1.45) / Math.max(1e-6, formationR)) - 1 : 0)
-    points.object.position.set(-points.center.x + fan.x, -points.center.y + R * 0.9, -points.center.z + fan.z)
+    const fanX = n > 1 ? seat.x * (Math.max(1, (R * 1.45) / Math.max(1e-6, formationR)) - 1) : 0
+    points.object.position.set(-points.center.x + fanX, -points.center.y + R * 0.9, -points.center.z)
     group.add(points.object)
     const meshes = new HeroMeshes(base)
     meshes.group.position.copy(points.object.position)
@@ -219,7 +220,7 @@ async function main() {
     const halfWidth = (Math.max(formationR, R * 1.45) + R * 1.0) * 1.1
     const halfHeight = R * 1.15 * 1.1          // platform at -0.35R, brain tops near +1.9R, centred on the look-at
     const tanV = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))
-    camDist = Math.max(halfWidth / (tanV * camera.aspect), halfHeight / tanV)
+    camDist = Math.max(halfWidth / (tanV * camera.aspect), halfHeight / tanV) * 1.15 + formationR * 0.3
     if (!userMoved) {
       camera.position.set(controls.target.x, R * 0.95, camDist)
       camera.lookAt(controls.target)
