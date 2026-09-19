@@ -10,8 +10,8 @@ pytestmark = pytest.mark.sim
 
 @pytest.fixture(scope="module")
 def engine():
-    core = pytest.importorskip("lif.core")
-    engine_fused = pytest.importorskip("lif.engine_fused")
+    core = pytest.importorskip("lif.core", exc_type=ImportError)
+    engine_fused = pytest.importorskip("lif.engine_fused", exc_type=ImportError)
     if not (paths.PACK / "manifest.json").is_file():
         pytest.skip("MaleCNS pack not compiled; run `fruitless pack`")
     return core, engine_fused, core.load_pack(paths.PACK)
