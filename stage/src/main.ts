@@ -9,14 +9,33 @@ import { AudioClock } from './clock'
 import { Score, type TuneInfo, type NoteEvent } from './score'
 import { FlyBody, idlePose } from './body/fly'
 import { rigFor } from './body/rig'
-import { drumKit, riser, saxophone, upright } from './body/instruments'
+import { drumKit, saxophone, upright } from './body/instruments'
 
 const params = new URLSearchParams(location.search)
 const takeName = params.get('take') ?? 'smoke'
 const base = `${import.meta.env.BASE_URL}takes/${takeName}`
 
+interface TakeIndexEntry { name: string; path: string; duration_s: number; roles: string[]; iterations: number; audio: boolean }
+
+async function setupControls() {
+  const sel = document.getElementById('take-select') as HTMLSelectElement
+  try {
+    const index: TakeIndexEntry[] = await (await fetch(`${import.meta.env.BASE_URL}takes/index.json`)).json()
+    sel.innerHTML = index.map(e =>
+      `<option value="${e.path}" ${e.path === takeName ? 'selected' : ''}>${e.name} · ${e.roles.join(', ')} (${e.iterations} take${e.iterations === 1 ? '' : 's'})</option>`).join('')
+    sel.onchange = () => { location.search = `?take=${encodeURIComponent(sel.value)}` }
+  } catch { sel.innerHTML = `<option>${takeName}</option>` }
+  const stats = document.getElementById('toggle-stats') as HTMLInputElement
+  const applyStats = () => document.body.classList.toggle('no-stats', !stats.checked)
+  stats.onchange = applyStats
+  try { stats.checked = localStorage.getItem('fs.stats') === '1' } catch { /* private mode */ }
+  applyStats()
+  stats.addEventListener('change', () => { try { localStorage.setItem('fs.stats', stats.checked ? '1' : '0') } catch { /* ignore */ } })
+}
+
 async function main() {
   const status = document.getElementById('status')!
+  await setupControls()
   status.textContent = `loading ${takeName}…`
   const take = await loadTake(base)
   const flies = take.flies
@@ -64,27 +83,74 @@ async function main() {
   const performers: Performer[] = []
   const proto = new BrainPoints(take.somaXyz, take.superclass, take.manifest.shared.superclass_legend)
   const R = proto.radius
-  const spacing = R * 2.4
-  const x0 = -spacing * (flies.length - 1) / 2
   const bodyScale = R * 0.2
   const meshInfo = (take.manifest as unknown as { meshes?: { index: string } }).meshes
+
+  // one shared circular platform; performers in an organic triangular formation on it,
+  // rhythm section toward the back, soloists toward the front. Brains float above each fly.
+  const n = flies.length
+  const formationR = n === 1 ? 0 : R * (0.9 + 0.35 * n)
+  const backRole = (r: string) => r === 'drums' ? 0 : r === 'bass' ? 1 : 2      // drums at the back
+  const ordered = [...flies].sort((a, b) => backRole(a.entry.role) - backRole(b.entry.role))
+  const seats = new Map<string, THREE.Vector3>()
+  ordered.forEach((f, i) => {
+    // spread around the back half-circle, back-centre first, then alternating left/right
+    const k = i === 0 ? 0 : (i % 2 === 1 ? -1 : 1) * Math.ceil(i / 2)
+    const ang = Math.PI / 2 + k * (Math.PI / Math.max(2, n)) * 0.85 + (i % 2 ? 0.08 : -0.06)   // organic offsets
+    const rr = formationR * (i === 0 ? 1.0 : 0.85 + 0.05 * (i % 2))
+    seats.set(f.entry.role, new THREE.Vector3(Math.cos(ang) * rr, 0, -Math.sin(ang) * rr + formationR * 0.35))
+  })
+  const platformR = formationR + bodyScale * 4.5
+  const platform = new THREE.Mesh(
+    new THREE.CylinderGeometry(platformR, platformR * 1.04, bodyScale * 0.35, 64),
+    new THREE.MeshStandardMaterial({ color: 0x1a1a24, roughness: 0.85, metalness: 0.1 }),
+  )
+  platform.position.y = -R * 0.35 - bodyScale * 0.175
+  scene.add(platform)
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(platformR * 1.02, bodyScale * 0.06, 8, 96),
+    new THREE.MeshStandardMaterial({ color: 0xf2b35c, emissive: 0x5a3c10, roughness: 0.4, metalness: 0.6 }))
+  rim.rotation.x = Math.PI / 2
+  rim.position.y = -R * 0.35
+  scene.add(rim)
+
+  // the house spotlight: from a ceiling above the platform, straight down, with a visible beam
+  const ceilingY = R * 2.6
+  const spot = new THREE.SpotLight(0xfff1d6, 900, ceilingY * 2.2, 0.62, 0.55, 1.4)
+  spot.position.set(0, ceilingY, 0)
+  spot.target.position.set(0, -R * 0.35, 0)
+  scene.add(spot, spot.target)
+  const beamH = ceilingY + R * 0.35
+  const beam = new THREE.Mesh(
+    new THREE.ConeGeometry(platformR * 1.05, beamH, 48, 1, true),
+    new THREE.MeshBasicMaterial({ color: 0xfff1d6, transparent: true, opacity: 0.045, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }),
+  )
+  beam.position.set(0, -R * 0.35 + beamH / 2, 0)
+  scene.add(beam)
+  const lamp = new THREE.Mesh(new THREE.CylinderGeometry(bodyScale * 0.6, bodyScale * 0.9, bodyScale * 0.8, 16),
+    new THREE.MeshStandardMaterial({ color: 0x222228, roughness: 0.5, metalness: 0.6, emissive: 0xfff1d6, emissiveIntensity: 0.6 }))
+  lamp.position.set(0, ceilingY + bodyScale * 0.4, 0)
+  scene.add(lamp)
+
+  const brainGroups: THREE.Object3D[] = []
   for (let fi = 0; fi < flies.length; fi++) {
     const f = flies[fi]
+    const seat = seats.get(f.entry.role) ?? new THREE.Vector3()
     const group = new THREE.Group()
-    group.position.set(x0 + fi * spacing, 0, 0)
+    group.position.copy(seat)
     scene.add(group)
     const points = fi === 0 ? proto : new BrainPoints(take.somaXyz, take.superclass, take.manifest.shared.superclass_legend)
-    // brain centred on the performer's x, standing above the riser
+    // brain floats above its fly
     points.object.position.set(-points.center.x, -points.center.y + R * 1.05, -points.center.z)
     group.add(points.object)
     const meshes = new HeroMeshes(base)
     meshes.group.position.copy(points.object.position)
     group.add(meshes.group)
+    brainGroups.push(points.object, meshes.group)
     const stand = new THREE.Group()
-    stand.position.set(0, -R * 0.35, R * 0.35)
-    stand.add(riser(bodyScale * 3.2))
+    stand.position.set(0, -R * 0.35, 0)
     const performer = new THREE.Group()
-    performer.rotation.y = 0.6 - fi * 0.15
+    // face the audience (+Z), turned a little toward the centre of the platform
+    performer.rotation.y = Math.atan2(-seat.x, Math.abs(seat.z) + formationR) * 0.6 + 0.35
     stand.add(performer)
     const body = new FlyBody(bodyScale)
     performer.add(body.group)
@@ -97,10 +163,6 @@ async function main() {
       const kit = drumKit(bodyScale); kit.group.position.set(0, 0, bodyScale * 0.9); performer.add(kit.group); kitHits = kit.hits
     }
     group.add(stand)
-    const spot = new THREE.SpotLight(0xfff1d6, 60, R * 3, 0.5, 0.6, 1.2)
-    spot.position.set(stand.position.x + bodyScale * 4, stand.position.y + bodyScale * 10, stand.position.z + bodyScale * 6)
-    spot.target = stand
-    group.add(spot)
     const heroIds = f.layers['hero'] ? await f.layers['hero'].subset : null
     const heroPos = new Map<number, number>()
     heroIds?.forEach((packIdx, k) => heroPos.set(packIdx, k))
@@ -111,6 +173,12 @@ async function main() {
       lastBin: -1, lastHeroBin: -1, motor: null, notes: [], kitHits,
     })
   }
+  // brain activity toggle
+  const brainToggle = document.getElementById('toggle-brain') as HTMLInputElement
+  const applyBrain = () => brainGroups.forEach(o => { o.visible = brainToggle.checked })
+  brainToggle.onchange = applyBrain
+  applyBrain()
+
   // hero meshes for every performer, behind the transport
   if (meshInfo) {
     status.textContent = 'loading hero meshes…'
@@ -132,7 +200,7 @@ async function main() {
   const controls = new OrbitControls(camera, canvas)
   controls.enableDamping = true
   controls.autoRotate = false
-  const lookAt = new THREE.Vector3(0, R * 0.3, 0)
+  const lookAt = new THREE.Vector3(0, R * 0.35, 0)
   controls.target.copy(lookAt)
   let userMoved = false
   controls.addEventListener('start', () => { userMoved = true })
@@ -145,11 +213,11 @@ async function main() {
     camera.updateProjectionMatrix()
     // back off until the bandstand's half-width fits the horizontal half-angle of the lens,
     // with margin; re-framed on every resize until the user takes the camera
-    const halfWidth = (spacing * (flies.length - 1) / 2 + R * 1.5) * 1.3
+    const halfWidth = (platformR + R * 0.9) * 1.25
     const halfAngle = Math.atan(Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect)
     camDist = halfWidth / Math.tan(halfAngle)
     if (!userMoved) {
-      camera.position.set(controls.target.x, R * 0.5, camDist)
+      camera.position.set(controls.target.x, R * 0.7, camDist)
       camera.lookAt(controls.target)
     }
   }
@@ -296,7 +364,7 @@ async function main() {
     }
     // camera pans (not pivots) toward the soloist until the user takes over
     const pfx = performers[focus].group.position.x
-    camTarget.set(pfx * 0.2, R * 0.3, 0)
+    camTarget.set(pfx * 0.2, R * 0.35, 0)
     if (!userMoved) {
       const kcam = 1 - Math.exp(-dt * 1.5)
       const dx = (camTarget.x - controls.target.x) * kcam

@@ -269,3 +269,12 @@ hl) and side; about 60 to 68 neurons each. Wing MNs are the 56 wing types.
   when the sax plays; ears are soma points, not meshes, so that reads on the
   readout strip (jo_a 35 Hz, jo_b 48 Hz while the head plays) rather than on
   a mesh.
+- Page feedback applied the same day: one shared circular platform with a
+  brass rim and the band in an organic triangular formation (drums back
+  centre, soloists forward left and right), a house spotlight from a ceiling
+  lamp with a faint visible beam, a `brain activity` toggle (default on) that
+  hides the points and meshes, a `stats` toggle (default off, remembered in
+  localStorage) for the readout, motor, rig and meta panels, and a take
+  dropdown fed by `stage/public/takes/index.json`, which `fruitless bundle`
+  writes. Each entry shows how many runs of `take` and `remap` produced the
+  result, counted in the take's `iterations` field.

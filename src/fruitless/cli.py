@@ -146,6 +146,9 @@ def cmd_bundle(args) -> int:
                      seed=rep.get("seed"), extra=extra, audio_src=(take / audio) if audio else None)
     print(f"bundle: {out}  flies={[f['role'] for f in m['flies']]}  duration={m['duration_s']}s  "
           f"audio={m['audio']}  soma={m['shared']['with_soma']}/{m['shared']['n_neurons']}")
+    from fruitless.recording.bundle import write_index
+    idx = write_index(out.parent)
+    print(f"index: {out.parent / 'index.json'} ({len(idx)} takes)")
     return 0
 
 

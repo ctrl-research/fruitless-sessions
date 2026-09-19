@@ -45,3 +45,9 @@ main { position: relative; min-height: 0; }
 @media (max-width: 900px) { .rig { display: none; } }
 
 .readout .title, .motor .title { color: var(--fg); font-size: 12px; margin-bottom: 4px; }
+
+.controls { display: flex; gap: 14px; align-items: center; font-size: 12px; color: var(--dim); }
+.ctl { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+.ctl select { background: #16161e; color: var(--fg); border: 1px solid #2a2a36; border-radius: 4px; height: 26px; max-width: 34ch; }
+.ctl input { accent-color: var(--accent); }
+body.no-stats .readout, body.no-stats .motor, body.no-stats .rig, body.no-stats .meta { display: none !important; }

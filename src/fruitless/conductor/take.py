@@ -145,6 +145,7 @@ def remap(take_dir: Path, tune_path: Path | None = None, render_audio: bool = Tr
                                           layers_by_role, motor_by_role)
     rep["flies"] = manifest_flies
     rep["audio"] = audio
+    rep["iterations"] = int(rep.get("iterations", 0)) + 1
     (take_dir / "take.json").write_text(json.dumps(rep, indent=2) + "\n")
     return rep
 
@@ -243,7 +244,9 @@ def run_take(tune_path: Path, out: Path, seed: int = 0, pack_dir: Path = paths.P
                                           layers_by_role={role: {k: w.close() for k, w in writers[role].items()} for role in flies},
                                           motor_by_role={role: np.stack(motor[role]).astype("<f4") for role in flies})
 
+    prev = json.loads((out / "take.json").read_text()) if (out / "take.json").is_file() else {}
     report = {
+        "iterations": int(prev.get("iterations", 0)) + 1,   # runs of `take` and `remap` on this take
         "tune": {
             "name": tune.name, "tempo_bpm": tune.tempo_bpm, "grid": tune.grid, "key": tune.key,
             "step_s": tune.step_seconds, "steps_per_bar": tune.steps_per_bar,
