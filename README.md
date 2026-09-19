@@ -59,7 +59,8 @@ The simulation needs Apple silicon, so the site is built here and pushed:
 scripts/publish                  # builds stage/dist with every bundled take, force-pushes gh-pages
 ```
 
-`.github/workflows/pages.yml` deploys whatever is on `gh-pages`. Soma
+`.github/workflows/pages.yml` deploys whatever is on `gh-pages` to
+https://fruitless-sessions.j6n.dev/. Soma
 positions, superclass codes and hero meshes live once under
 `stage/public/takes/shared` and `stage/public/takes/meshes`; each take adds
 only its activity layers and audio (a four-fly 72 s blues is about 60 MB, the

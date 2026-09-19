@@ -2,8 +2,8 @@
 # Build the stage with every bundled take and push it to the `gh-pages` branch as a single
 # orphan commit, so the branch never accumulates history (bundles are ~100 MB each).
 #
-#   scripts/publish                 # base path /fruitless-sessions/ (GitHub project pages)
-#   VITE_BASE=/ scripts/publish     # for a root domain
+#   scripts/publish                                  # root domain (fruitless-sessions.j6n.dev)
+#   VITE_BASE=/fruitless-sessions/ scripts/publish   # for a GitHub project page instead
 #
 # Simulation runs only on Apple silicon, so publishing is a local step: the takes under
 # stage/public/takes are whatever `fruitless take`, `bundle` and `meshes` produced here.
@@ -26,4 +26,4 @@ git -C "$ROOT" worktree add --detach "$TMP" >/dev/null 2>&1
   git push -f origin gh-pages
 )
 git -C "$ROOT" worktree remove --force "$TMP"
-echo "pushed gh-pages ($SIZE). Enable Pages on the repo (branch gh-pages, root) if not already."
+echo "pushed gh-pages ($SIZE); the Pages workflow deploys it: gh run list --workflow pages.yml"
