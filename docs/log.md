@@ -419,3 +419,18 @@ hl) and side; about 60 to 68 neurons each. Wing MNs are the 56 wing types.
   builds on a throwaway orphan branch and pushes it to `gh-pages` by ref.
   And the `github-pages` environment only allowed the default branch to
   deploy; the environment's branch policy now lists `gh-pages` and `main`.
+
+## 2026-09-19: strict written parts, and exact times
+
+- Jonathan heard notes missing from the Take Five head. Two causes. Gating:
+  a written note only sounded if the fly's circuit was active at that grid
+  step, which dropped 75 of the sax's 328 notes and a thousand drum hits.
+  Sampling: the sax read the melody once per grid step, so at 178 BPM any
+  note shorter than a swing eighth, or two notes inside one step, merged.
+- Tunes now take `written: strict | gated`. Strict sounds every written note
+  and leaves the fly only velocity and articulation; gated is the old
+  behaviour. Take Five is strict. In arrangement mode every role plays its
+  written notes at their exact written times, not quantised to the grid, and
+  piano notes that start together are one chord.
+- Four commits with the publish fixes had landed on the feature branch after
+  PR #9 merged; they are cherry-picked here.
