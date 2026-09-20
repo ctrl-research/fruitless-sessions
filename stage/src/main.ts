@@ -10,6 +10,7 @@ import { Score, type TuneInfo, type NoteEvent } from './score'
 import { FlyBody, idlePose } from './body/fly'
 import { rigFor } from './body/rig'
 import { drumKit, piano, saxophone, upright } from './body/instruments'
+import { curtains, walnutMaterial } from './scenery'
 
 const params = new URLSearchParams(location.search)
 const takeName = params.get('take') ?? 'fly-me-to-the-moon'
@@ -114,10 +115,17 @@ async function main() {
   const platformR = reach + bodyScale * 1.6
   const platform = new THREE.Mesh(
     new THREE.CylinderGeometry(platformR, platformR * 1.04, bodyScale * 0.35, 64),
-    new THREE.MeshStandardMaterial({ color: 0x1a1a24, roughness: 0.85, metalness: 0.1 }),
+    walnutMaterial(),
   )
   platform.position.y = -R * 0.35 - bodyScale * 0.175
   scene.add(platform)
+  // red velvet behind the band, lit softly so it reads as cloth rather than a black void
+  const drapes = curtains(platformR * 1.9, R * 2.4)
+  drapes.position.set(0, -R * 0.35, -platformR * 0.35)
+  scene.add(drapes)
+  const wash = new THREE.PointLight(0xffd6c0, 40, platformR * 5, 1.6)
+  wash.position.set(0, R * 1.2, platformR * 0.6)
+  scene.add(wash)
   const rim = new THREE.Mesh(new THREE.TorusGeometry(platformR * 1.02, bodyScale * 0.06, 8, 96),
     new THREE.MeshStandardMaterial({ color: 0xf2b35c, emissive: 0x5a3c10, roughness: 0.4, metalness: 0.6 }))
   rim.rotation.x = Math.PI / 2
