@@ -434,3 +434,21 @@ hl) and side; about 60 to 68 neurons each. Wing MNs are the 56 wing types.
   piano notes that start together are one chord.
 - Four commits with the publish fixes had landed on the feature branch after
   PR #9 merged; they are cherry-picked here.
+
+## 2026-09-20: Fly Me to the Moon, from a big band chart
+
+- A second arrangement, fifteen tracks all named alike: two drum tracks,
+  piano, nylon guitar comping, jazz guitar, bass, flute, baritone and two
+  alto saxes, two trombones, trumpet, muted trumpet and a brass pad. 116 BPM
+  in 4/4 after a 1.2 s count-in at another tempo; 73 bars.
+- Arrangement loader additions: parts may name tracks as `track:N` or
+  `program:N` as well as by name; `skyline: [role]` reduces several tracks to
+  one line by keeping the highest sounding note (a soloist reading a section
+  part); the dominant tempo, the one holding for most of the file, sets the
+  grid and its start; rests of one or two bars inside the lead's line stay in
+  the head rather than splitting the form.
+- Quartet reduction: sax takes the skyline of jazz guitar, lead alto and lead
+  trumpet; piano takes the nylon guitar comping and the piano hits; bass and
+  both drum tracks map directly. Trombones, baritone, flute, muted trumpet and
+  the brass pad are not played. The chart estimate reads as the tune in C.
+- This is the default take on the site.

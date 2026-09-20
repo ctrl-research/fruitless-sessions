@@ -1,0 +1,29 @@
+name: fly-me-to-the-moon
+grid: swing8
+key: C
+# Arrangement mode from a big band MIDI (not committed; see .gitignore). Fifteen tracks, all
+# named alike, so parts are mapped by track number. Four flies play a quartet reduction:
+#   sax    the top melodic line across the jazz guitar (first chorus melody), lead alto and
+#          lead trumpet, reduced to one voice by taking the highest sounding note
+#   piano  the nylon guitar comping plus the piano hits
+#   bass   the acoustic bass
+#   drums  both drum tracks
+# Trombones, baritone sax, flute, muted trumpet and the brass pad are not played.
+arrangement: tune.mid
+lead: sax
+parts:
+  sax: ["track:3", "track:9", "track:10"]
+  piano: ["track:2", "track:1"]
+  bass: "track:4"
+  drums: ["track:0", "track:13"]
+skyline: [sax]
+chord_tracks: ["track:4", "track:2", "track:1"]
+bass_track: "track:4"
+written: strict
+roles: [sax, bass, drums, piano]
+coupling:
+  sax:   {bass: 0.3, drums: 0.3, piano: 0.3}
+  bass:  {sax: 0.4, drums: 0.5, piano: 0.2}
+  drums: {sax: 0.4, bass: 0.5, piano: 0.2}
+  piano: {sax: 0.5, bass: 0.3, drums: 0.2}
+free_style: false
