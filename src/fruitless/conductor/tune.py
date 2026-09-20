@@ -343,7 +343,6 @@ def _skyline(notes: list[tuple[float, float, int, int]]) -> list[tuple[float, fl
     short when a higher one starts over it. For a soloist reading a section part."""
     out: list[tuple[float, float, int, int]] = []
     for st, dur, midi, vel in notes:
-        end = st + dur
         if out:
             pst, pdur, pmidi, pvel = out[-1]
             pend = pst + pdur
