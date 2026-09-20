@@ -61,8 +61,8 @@ export class HeroMeshes {
       geom.computeVertexNormals()
       const base = groupColor(groupOf(packIdx))
       const mat = new THREE.MeshStandardMaterial({
-        color: base, emissive: base.clone().multiplyScalar(0.05), roughness: 0.7, metalness: 0.0,
-        transparent: true, opacity: 0.85,
+        color: base, emissive: base.clone().multiplyScalar(0.03), roughness: 0.75, metalness: 0.0,
+        transparent: true, opacity: 0.8,
       })
       const mesh = new THREE.Mesh(geom, mat)
       mesh.userData.packIdx = packIdx
@@ -85,8 +85,8 @@ export class HeroMeshes {
     for (const h of this.byIndex.values()) {
       h.heat *= d
       if (h.heat < 0.002) h.heat = 0
-      h.mat.emissive.copy(h.base).multiplyScalar(0.05).lerp(hot, h.heat)
-      h.mat.color.copy(h.base).lerp(hot, h.heat * 0.7)
+      h.mat.emissive.copy(h.base).multiplyScalar(0.03).lerp(hot, h.heat)
+      h.mat.color.copy(h.base).lerp(hot, h.heat * 0.85)
     }
   }
 
@@ -99,5 +99,5 @@ let nextHue = 0.55
 export function groupColor(group: string | undefined): THREE.Color {
   const key = group ?? '_'
   if (!(key in GROUP_HUES)) { GROUP_HUES[key] = nextHue; nextHue = (nextHue + 0.23) % 1 }
-  return new THREE.Color().setHSL(GROUP_HUES[key], 0.45, 0.3)   // resting meshes sit back; a spike lifts them to amber
+  return new THREE.Color().setHSL(GROUP_HUES[key], 0.4, 0.17)   // resting meshes sit well back; a spike lifts them to amber
 }
