@@ -48,7 +48,7 @@ export class BrainPoints {
     for (let i = 0; i < this.n; i++) {
       const name = superclass[i] === 255 ? '' : legend[superclass[i]]
       const hue = SUPERCLASS_HUE[name] ?? 0.0
-      c.setHSL(hue, 0.45, 0.16)   // resting tint; with normal blending this is as bright as rest ever gets
+      c.setHSL(hue, 0.4, 0.075)   // resting tint; with normal blending this is as bright as rest ever gets
       this.base[3 * i] = c.r; this.base[3 * i + 1] = c.g; this.base[3 * i + 2] = c.b
     }
     this.color = new Float32Array(this.base)
@@ -64,7 +64,7 @@ export class BrainPoints {
     const mat = new THREE.PointsMaterial({
       // normal blending: overlapping resting dots no longer add up to white in the dense optic
       // lobes, so the haze stays a haze and a spiking dot is the brightest thing in the brain
-      size: 0.4, vertexColors: true, sizeAttenuation: true, transparent: true, opacity: 0.55,
+      size: 0.4, vertexColors: true, sizeAttenuation: true, transparent: true, opacity: 0.4,
       depthWrite: false, blending: THREE.NormalBlending,
     })
     this.object = new THREE.Points(geom, mat)
@@ -91,8 +91,8 @@ export class BrainPoints {
       h[i] = t
       // lerp from base toward a hot amber-white
       c[3 * i] = b[3 * i] + (1.0 - b[3 * i]) * t
-      c[3 * i + 1] = b[3 * i + 1] + (0.62 - b[3 * i + 1]) * t
-      c[3 * i + 2] = b[3 * i + 2] + (0.18 - b[3 * i + 2]) * t
+      c[3 * i + 1] = b[3 * i + 1] + (0.7 - b[3 * i + 1]) * t
+      c[3 * i + 2] = b[3 * i + 2] + (0.25 - b[3 * i + 2]) * t
       if (t === 0) this.active.delete(i)
     }
     this.colorAttr.needsUpdate = true

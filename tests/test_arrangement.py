@@ -11,6 +11,25 @@ from fruitless.conductor.tune import Section, Tune, load_tune
 TAKE_FIVE = Path(__file__).resolve().parents[1] / "tunes" / "take-five"
 
 
+def _tune_with_sax_part() -> Tune:
+    t = _tune()
+    # three fast notes inside one beat: only exact-time following keeps them all
+    t.parts["sax"] = [(0.0, 0.33, 72, 90), (0.33, 0.33, 74, 90), (0.66, 0.34, 76, 90)]
+    return t
+
+
+def test_sax_follows_every_written_note_at_its_own_time():
+    from fruitless.conductor.mapper import SaxMapper
+    t = _tune_with_sax_part()
+    t.written = "strict"
+    m = SaxMapper(t)
+    for step in range(t.steps_per_bar):
+        m.on_step(step, {"song_on": 0.0, "intensity": 20.0, "pulse": 0.3, "pip10_hz": 0.0})
+    notes = m.finish(t.duration_s)
+    assert [n.midi for n in notes] == [72, 74, 76]
+    assert notes[1].t == pytest.approx(0.33 * 0.5, abs=1e-6)     # exact written time at 120 BPM
+
+
 def _tune() -> Tune:
     # 4/4 at 120, swing eighths (8 steps a bar), one bar, everyone follows a written part
     return Tune(
@@ -61,3 +80,15 @@ def test_take_five_arrangement_loads():
     assert [s.kind for s in t.form][:3] == ["vamp", "head", "vamp"]
     assert t.chord_at(5 * t.steps_per_bar) == "Ebm7"          # the vamp
     assert t.chord_at(100 * t.steps_per_bar) == "Em7"         # the head out is up a half step
+
+
+def test_strict_written_parts_always_sound():
+    t = _tune()
+    t.written = "strict"
+    m = BassMapper(t)
+    for step in range(t.steps_per_bar):
+        m.on_step(step, {"load": 0.0, "step_l": 0, "step_r": 0})
+    assert [n.midi for n in m.finish(t.duration_s)] == [36, 43]
+    d = DrumsMapper(t)
+    d.on_step(2, {"power": 0.0, "steer": 0.0, "hg": 0.0, "burst": 0.0, "gf": 0.0})
+    assert [n.midi for n in d.finish(1)] == [SNARE]

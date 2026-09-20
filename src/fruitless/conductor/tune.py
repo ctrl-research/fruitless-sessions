@@ -46,6 +46,10 @@ class Tune:
     # arrangement mode: written parts per role, (start_beat, dur_beats, midi, velocity) from bar 1
     parts: dict[str, list[tuple[float, float, int, int]]] = field(default_factory=dict)
     arrangement: str | None = None
+    # how faithfully written parts are played: "gated" lets a fly drop a note when its circuit
+    # is quiet at that step; "strict" always sounds the written note and the fly only shapes
+    # its velocity and articulation
+    written: str = "gated"
 
     # ------------------------------------------------------------ timing
     @property
@@ -147,12 +151,17 @@ class Tune:
 
     def part_onsets(self, role: str, step: int) -> list[tuple[int, int, float]]:
         """Written notes of `role` starting within this grid step: (midi, velocity, dur_beats)."""
+        return [(m, v, d) for (_st, m, v, d) in self.part_onsets_timed(role, step)]
+
+    def part_onsets_timed(self, role: str, step: int) -> list[tuple[float, int, int, float]]:
+        """Like part_onsets, with each note's exact written start in seconds first."""
         notes = self.parts.get(role)
         if not notes:
             return []
         b0 = step / self.steps_per_beat
         b1 = (step + 1) / self.steps_per_beat
-        return [(m, v, d) for (st, d, m, v) in notes if b0 <= st < b1]
+        beat_s = 60.0 / self.tempo_bpm
+        return [(st * beat_s, m, v, d) for (st, d, m, v) in notes if b0 <= st < b1]
 
 
 # ---------------------------------------------------------------- theory
@@ -341,7 +350,7 @@ def load_tune(path: Path) -> Tune:
             name=doc["name"], tempo_bpm=arr["bpm"], grid=doc.get("grid", "swing8"), meter_beats=arr["beats"],
             key=doc.get("key", "C"), chart=arr["chart"], form=arr["form"], roles=roles,
             coupling=doc.get("coupling", {}), free_style=False, melody=arr["melody"], source_dir=path.parent,
-            parts=arr["parts"], arrangement=doc["arrangement"],
+            parts=arr["parts"], arrangement=doc["arrangement"], written=str(doc.get("written", "gated")),
         )
     chart_raw = doc.get("chart") or []
     chart = [[str(c) if c else "" for c in bar] for bar in chart_raw]

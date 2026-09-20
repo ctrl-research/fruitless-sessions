@@ -79,6 +79,19 @@ class SaxMapper:
         step_s = tune.step_seconds
         self._intensity_mean += (intensity - self._intensity_mean) * 0.1
 
+        if self.role in tune.parts:
+            # arranged: every written note at its exact time; the fly gates it (unless strict)
+            # and sets velocity and articulation
+            beat_s = 60.0 / tune.tempo_bpm
+            for t_note, midi, vel, dur in tune.part_onsets_timed(self.role, step):
+                self._close(t_note)
+                if song_on or tune.written == "strict":
+                    v = int(np.clip(vel * (0.55 + 0.45 * min(1.0, intensity / 80.0)), 40, 120))
+                    d = dur * beat_s * (0.6 if pulse > PULSE_CV else 0.95)
+                    self._open = Note(t_note, d, midi, v, step, self.role, "written")
+                    self._close(t_note + d)
+            return
+
         if sec.kind == "head" and tune.soloist_at(step) == self.role:
             m = tune.melody_at(step)
             starts = m is not None and m != self._last_melody
@@ -91,12 +104,12 @@ class SaxMapper:
                 self._close(t)
             elif starts:
                 self._close(t)
-                if song_on:
+                if song_on or tune.written == "strict":
                     dur = 0.55 * step_s if pulse > PULSE_CV else step_s
                     self._open = Note(t, dur, m, self.velocity(intensity), step, self.role, "melody")
                     if pulse > PULSE_CV:
                         self._close(t + dur)
-            elif self._open is not None and not song_on:
+            elif self._open is not None and not song_on and tune.written != "strict":
                 self._close(t)
             return
 

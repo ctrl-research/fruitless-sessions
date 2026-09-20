@@ -7,6 +7,9 @@ key: e-              # E-flat minor (music21 spelling)
 # decides whether each note sounds, how hard, how short, and whether it pushes or lays back.
 # Bars where the lead part is silent are "vamp": the rhythm section keeps following its parts.
 arrangement: tune.mid
+# strict: every written note sounds and the flies shape only velocity and articulation.
+# gated: a fly may drop a note when its circuit is quiet at that step (the default elsewhere).
+written: strict
 lead: sax
 parts:
   sax: ALT SAX

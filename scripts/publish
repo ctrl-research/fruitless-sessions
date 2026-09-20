@@ -2,8 +2,8 @@
 # Build the stage with every bundled take and push it to the `gh-pages` branch as a single
 # orphan commit, so the branch never accumulates history (bundles are ~100 MB each).
 #
-#   scripts/publish                 # base path /fruitless-sessions/ (GitHub project pages)
-#   VITE_BASE=/ scripts/publish     # for a root domain
+#   scripts/publish                                  # root domain (fruitless-sessions.j6n.dev)
+#   VITE_BASE=/fruitless-sessions/ scripts/publish   # for a GitHub project page instead
 #
 # Simulation runs only on Apple silicon, so publishing is a local step: the takes under
 # stage/public/takes are whatever `fruitless take`, `bundle` and `meshes` produced here.
@@ -15,15 +15,21 @@ npm run build >/dev/null
 SIZE=$(du -sh dist | cut -f1)
 echo "built dist ($SIZE)"
 TMP="$(mktemp -d)"
-git -C "$ROOT" worktree add --detach "$TMP" >/dev/null 2>&1
+git -C "$ROOT" worktree add --detach "$TMP"
 ( cd "$TMP"
-  git checkout --orphan gh-pages >/dev/null 2>&1
+  # a throwaway orphan branch; pushed to gh-pages by ref so a stale local gh-pages never blocks it
+  git checkout --orphan "publish-$$"
   git rm -rfq . >/dev/null 2>&1 || true
   cp -R "$ROOT/stage/dist/." .
   touch .nojekyll
+  # a push-triggered workflow only runs if it exists on the pushed branch
+  mkdir -p .github/workflows
+  cp "$ROOT/.github/workflows/pages.yml" .github/workflows/pages.yml
   git add -A
   git -c user.name="fruitless publish" -c user.email="noreply@ctrl-research" commit -qm "publish $(date -u +%Y-%m-%dT%H:%MZ) from $(git -C "$ROOT" rev-parse --short HEAD)"
-  git push -f origin gh-pages
+  git push -f origin "HEAD:gh-pages"
 )
 git -C "$ROOT" worktree remove --force "$TMP"
-echo "pushed gh-pages ($SIZE). Enable Pages on the repo (branch gh-pages, root) if not already."
+git -C "$ROOT" branch -D "publish-$$" >/dev/null 2>&1 || true
+git -C "$ROOT" branch -D gh-pages >/dev/null 2>&1 || true
+echo "pushed gh-pages ($SIZE); the Pages workflow deploys it: gh run list --workflow pages.yml"
