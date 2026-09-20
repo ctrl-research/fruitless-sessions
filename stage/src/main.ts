@@ -12,7 +12,7 @@ import { rigFor } from './body/rig'
 import { drumKit, piano, saxophone, upright } from './body/instruments'
 
 const params = new URLSearchParams(location.search)
-const takeName = params.get('take') ?? 'smoke'
+const takeName = params.get('take') ?? 'fly-me-to-the-moon'
 const base = `${import.meta.env.BASE_URL}takes/${takeName}`
 
 interface TakeIndexEntry { name: string; path: string; duration_s: number; roles: string[]; audio: boolean }
