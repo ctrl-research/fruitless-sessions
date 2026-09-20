@@ -10,9 +10,10 @@ import { Score, type TuneInfo, type NoteEvent } from './score'
 import { FlyBody, idlePose } from './body/fly'
 import { rigFor } from './body/rig'
 import { drumKit, piano, saxophone, upright } from './body/instruments'
+import { audience, bobAudience, curtains, walnutMaterial } from './scenery'
 
 const params = new URLSearchParams(location.search)
-const takeName = params.get('take') ?? 'take-five'
+const takeName = params.get('take') ?? 'fly-me-to-the-moon'
 const base = `${import.meta.env.BASE_URL}takes/${takeName}`
 
 interface TakeIndexEntry { name: string; path: string; duration_s: number; roles: string[]; audio: boolean }
@@ -53,7 +54,7 @@ async function main() {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false })
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
   const scene = new THREE.Scene()
-  scene.background = new THREE.Color(0x07070b)
+  scene.background = new THREE.Color(0x1c070a)   // deep maroon behind and above the curtains
   scene.add(new THREE.AmbientLight(0xffffff, 0.35))
   const key = new THREE.DirectionalLight(0xffffff, 1.2)
   key.position.set(1, 1, 1)
@@ -112,35 +113,79 @@ async function main() {
   // the disc reaches just past the furthest seat, so a performer stepped forward still stands on it
   const reach = Math.max(formationR, ...[...seats.values()].map(v => Math.hypot(v.x, v.z)))
   const platformR = reach + bodyScale * 1.6
+  // the whole stage rides on a riser about a piano high; the house floor and the audience stay down
+  const stageLift = bodyScale * 1.6
+  const stageGroup = new THREE.Group()
+  stageGroup.position.y = stageLift
+  scene.add(stageGroup)
   const platform = new THREE.Mesh(
     new THREE.CylinderGeometry(platformR, platformR * 1.04, bodyScale * 0.35, 64),
-    new THREE.MeshStandardMaterial({ color: 0x1a1a24, roughness: 0.85, metalness: 0.1 }),
+    walnutMaterial(),
   )
   platform.position.y = -R * 0.35 - bodyScale * 0.175
-  scene.add(platform)
+  stageGroup.add(platform)
+  const riserSkirt = new THREE.Mesh(
+    new THREE.CylinderGeometry(platformR * 1.04, platformR * 1.06, stageLift, 64, 1, true),
+    new THREE.MeshStandardMaterial({ color: 0x241610, roughness: 0.9 }),
+  )
+  riserSkirt.position.y = -R * 0.35 - bodyScale * 0.35 - stageLift / 2
+  stageGroup.add(riserSkirt)
+  // the house floor: dark brown boards out to the horizon, under the platform
+  const floor = new THREE.Mesh(
+    new THREE.CircleGeometry(platformR * 12, 96),
+    new THREE.MeshStandardMaterial({ color: 0x2a1a10, roughness: 0.95, metalness: 0.0 }),
+  )
+  floor.rotation.x = -Math.PI / 2
+  floor.position.y = -R * 0.35 - bodyScale * 0.35
+  scene.add(floor)
+  // the audience: fruit fly silhouettes on the house floor between the camera and the stage
+  const crowd = audience(() => {
+    // a standing spectator: reared up on the hind and middle legs, forelegs raised, looking up at the stage
+    const b = new FlyBody(1)
+    const standing = idlePose()
+    standing.bodyPitch = -0.65
+    standing.bodyHeight = 0.3
+    standing.wingExtend = [0.25, 0.25]
+    standing.legs[0] = [0.9, -0.9, 1.1]; standing.legs[3] = [0.9, -0.9, 1.1]
+    b.apply(standing, 0)
+    // wings hang down behind the body so they stay out of the silhouette
+    const wings = b as unknown as { wingL: THREE.Group; wingR: THREE.Group }
+    wings.wingL.rotation.x = 1.35
+    wings.wingR.rotation.x = 1.35
+    return b.group
+  }, 42,
+    { xHalf: platformR * 1.5, zNear: platformR * 1.25, zFar: platformR * 2.0 }, bodyScale * 0.8, floor.position.y)
+  scene.add(crowd)
+  // red velvet behind the band, lit softly so it reads as cloth rather than a black void
+  const drapes = curtains(platformR * 1.9, R * 2.4)
+  drapes.position.set(0, -R * 0.35, -platformR * 0.35)
+  stageGroup.add(drapes)
+  const wash = new THREE.PointLight(0xffd6c0, 40, platformR * 5, 1.6)
+  wash.position.set(0, R * 1.2, platformR * 0.6)
+  scene.add(wash)
   const rim = new THREE.Mesh(new THREE.TorusGeometry(platformR * 1.02, bodyScale * 0.06, 8, 96),
     new THREE.MeshStandardMaterial({ color: 0xf2b35c, emissive: 0x5a3c10, roughness: 0.4, metalness: 0.6 }))
   rim.rotation.x = Math.PI / 2
   rim.position.y = -R * 0.35
-  scene.add(rim)
+  stageGroup.add(rim)
 
   // the house spotlight: from a ceiling above the platform, straight down, with a visible beam
   const ceilingY = R * 2.6
   const spot = new THREE.SpotLight(0xfff1d6, 900, ceilingY * 2.2, 0.72, 0.55, 1.4)
   spot.position.set(0, ceilingY, 0)
   spot.target.position.set(0, -R * 0.35, 0)
-  scene.add(spot, spot.target)
+  stageGroup.add(spot, spot.target)
   const beamH = ceilingY + R * 0.35
   const beam = new THREE.Mesh(
     new THREE.ConeGeometry(platformR * 1.35, beamH, 48, 1, true),
     new THREE.MeshBasicMaterial({ color: 0xfff1d6, transparent: true, opacity: 0.045, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }),
   )
   beam.position.set(0, -R * 0.35 + beamH / 2, 0)
-  scene.add(beam)
+  stageGroup.add(beam)
   const lamp = new THREE.Mesh(new THREE.CylinderGeometry(bodyScale * 0.6, bodyScale * 0.9, bodyScale * 0.8, 16),
     new THREE.MeshStandardMaterial({ color: 0x222228, roughness: 0.5, metalness: 0.6, emissive: 0xfff1d6, emissiveIntensity: 0.6 }))
   lamp.position.set(0, ceilingY + bodyScale * 0.4, 0)
-  scene.add(lamp)
+  stageGroup.add(lamp)
 
   const brainGroups: THREE.Object3D[] = []
   for (let fi = 0; fi < flies.length; fi++) {
@@ -148,7 +193,7 @@ async function main() {
     const seat = seats.get(f.entry.role) ?? new THREE.Vector3()
     const group = new THREE.Group()
     group.position.copy(seat)
-    scene.add(group)
+    stageGroup.add(group)
     const points = fi === 0 ? proto : new BrainPoints(take.somaXyz, take.superclass, take.manifest.shared.superclass_legend)
     // brains are wider than the seats are apart, so they fan out from the platform centre
     // just enough not to touch; performers standing forward hang theirs very slightly lower
@@ -231,7 +276,7 @@ async function main() {
   const controls = new OrbitControls(camera, canvas)
   controls.enableDamping = true
   controls.autoRotate = false
-  const lookAt = new THREE.Vector3(0, R * 0.45, 0)
+  const lookAt = new THREE.Vector3(0, R * 0.25 + stageLift * 0.6, 0)
   controls.target.copy(lookAt)
   let userMoved = false
   controls.addEventListener('start', () => { userMoved = true })
@@ -246,11 +291,11 @@ async function main() {
     // with margin; re-framed on every resize until the user takes the camera
     // fit both the band's width and the platform-to-brain height, whichever needs more distance
     const halfWidth = (Math.max(reach, R * 1.45) + R * 1.0) * 1.1
-    const halfHeight = R * 1.0 * 1.1           // platform at -0.35R, flat brains top out near +1.3R
+    const halfHeight = R * 1.3 * 1.1           // from the audience on the house floor up to the brains
     const tanV = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))
     camDist = Math.max(halfWidth / (tanV * camera.aspect), halfHeight / tanV) * 1.15 + formationR * 0.6   // the front pair stands forward of the centre
     if (!userMoved) {
-      camera.position.set(controls.target.x, R * 0.8, camDist)
+      camera.position.set(controls.target.x, R * 0.9 + stageLift * 0.6, camDist)
       camera.lookAt(controls.target)
     }
   }
@@ -412,6 +457,8 @@ async function main() {
       pf.meshes.update(dtAnim)
     }
 
+    // the crowd bobs on the beat while the music moves; a hop is a few percent of a body
+    if (moved && tuneInfo) bobAudience(crowd, tNow / (60 / tuneInfo.tempo_bpm))
     if (score) {
       score.drawStrip(strip, tNow)
       const sec = score.sectionAt(tNow)
@@ -423,7 +470,7 @@ async function main() {
     }
     // camera pans (not pivots) toward the soloist until the user takes over
     const pfx = performers[focus].group.position.x
-    camTarget.set(pfx * 0.2, R * 0.45, 0)
+    camTarget.set(pfx * 0.2, R * 0.25 + stageLift * 0.6, 0)
     if (!userMoved) {
       const kcam = 1 - Math.exp(-dt * 1.5)
       const dx = (camTarget.x - controls.target.x) * kcam

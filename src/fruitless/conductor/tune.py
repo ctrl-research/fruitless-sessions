@@ -258,24 +258,49 @@ def _load_arrangement(path: Path, doc: dict) -> dict:
     import pretty_midi
 
     pm = pretty_midi.PrettyMIDI(str(path))
-    tempos = pm.get_tempo_changes()[1]
-    bpm = float(doc.get("tempo_bpm") or (tempos[0] if len(tempos) else 120.0))
+    times, tempos = pm.get_tempo_changes()
+    # the tempo that holds for most of the file wins (a count-in is often at another tempo), and
+    # the grid starts where it begins unless the tune says otherwise
+    if len(tempos):
+        spans = [(float(times[i + 1]) if i + 1 < len(times) else pm.get_end_time()) - float(times[i]) for i in range(len(times))]
+        dom = int(np.argmax(spans))
+        file_bpm, file_t0 = float(tempos[dom]), float(times[dom])
+    else:
+        file_bpm, file_t0 = 120.0, 0.0
+    bpm = float(doc.get("tempo_bpm") or file_bpm)
     ts = pm.time_signature_changes
     beats = int(doc.get("meter", f"{ts[0].numerator}/4" if ts else "4/4").split("/")[0])
     beat_s = 60.0 / bpm
-    t0 = float(doc.get("grid_offset_s", 0.0))
+    t0 = float(doc.get("grid_offset_s", file_t0))
     n_bars = int(np.ceil((pm.get_end_time() - t0) / (beat_s * beats)))
     by_name: dict[str, list] = {}
     for inst in pm.instruments:
         by_name.setdefault(inst.name, []).append(inst)
+
+    def tracks_for(spec: str) -> list:
+        """A part spec: a track name, `track:N` (index among instruments), or `program:N`."""
+        if spec.startswith("track:"):
+            i = int(spec.split(":", 1)[1])
+            return [pm.instruments[i]] if 0 <= i < len(pm.instruments) else []
+        if spec.startswith("program:"):
+            prog = int(spec.split(":", 1)[1])
+            return [inst for inst in pm.instruments if inst.program == prog and not inst.is_drum]
+        return by_name.get(spec, [])
+
+    skyline_roles = set(doc.get("skyline") or [])
     parts: dict[str, list[tuple[float, float, int, int]]] = {}
-    for role, names in (doc.get("parts") or {}).items():
+    for role, specs in (doc.get("parts") or {}).items():
         notes = []
-        for name in ([names] if isinstance(names, str) else names):
-            for inst in by_name.get(name, []):
+        for spec in ([specs] if isinstance(specs, str) else specs):
+            for inst in tracks_for(str(spec)):
                 for n in inst.notes:
+                    if n.start < t0:
+                        continue
                     notes.append(((n.start - t0) / beat_s, max(0.05, (n.end - n.start) / beat_s), int(n.pitch), int(n.velocity)))
-        parts[role] = sorted(notes)
+        notes.sort()
+        if role in skyline_roles:
+            notes = _skyline(notes)
+        parts[role] = notes
     # form: bars where the melody part has notes are "head"; the rest is "vamp" (everyone else
     # still follows their written parts, the soloist rests)
     lead = doc.get("lead", "sax")
@@ -285,6 +310,19 @@ def _load_arrangement(path: Path, doc: dict) -> dict:
         if 0 <= b < n_bars:
             dens[b] += 1
     kinds = ["head" if d >= 3 else "vamp" for d in dens]
+    # a rest of a bar or two inside a melody is still the head, not a new section
+    i = 0
+    while i < len(kinds):
+        if kinds[i] == "vamp":
+            j = i
+            while j < len(kinds) and kinds[j] == "vamp":
+                j += 1
+            if 0 < i and j < len(kinds) and j - i <= 2:
+                for k in range(i, j):
+                    kinds[k] = "head"
+            i = j
+        else:
+            i += 1
     form: list[Section] = []
     for k in kinds:
         if form and form[-1].kind == k:
@@ -293,20 +331,38 @@ def _load_arrangement(path: Path, doc: dict) -> dict:
             form.append(Section(k, (lead,) if k == "head" else (), 1))
     chart = doc.get("chart") or []
     if not chart:
-        chart = _estimate_chart(pm, t0, beat_s, beats, n_bars, doc.get("chord_tracks") or ["ACOU BASS", "A.PIANO 2"],
-                                doc.get("bass_track", "ACOU BASS"))
+        chord_insts = [i for spec in (doc.get("chord_tracks") or ["ACOU BASS", "A.PIANO 2"]) for i in tracks_for(str(spec))]
+        bass_insts = tracks_for(str(doc.get("bass_track", "ACOU BASS")))
+        chart = _estimate_chart(pm, t0, beat_s, beats, n_bars, chord_insts, bass_insts)
     return {"bpm": bpm, "beats": beats, "n_bars": n_bars, "parts": parts, "form": form, "chart": chart,
             "melody": [(st, d, m) for (st, d, m, _v) in parts.get(lead, [])]}
 
 
-def _estimate_chart(pm, t0: float, beat_s: float, beats: int, n_bars: int, tracks: list[str],
-                    bass_track: str) -> list[list[str]]:
+def _skyline(notes: list[tuple[float, float, int, int]]) -> list[tuple[float, float, int, int]]:
+    """One line out of several: at any moment keep only the highest note, and cut a note
+    short when a higher one starts over it. For a soloist reading a section part."""
+    out: list[tuple[float, float, int, int]] = []
+    for st, dur, midi, vel in notes:
+        if out:
+            pst, pdur, pmidi, pvel = out[-1]
+            pend = pst + pdur
+            if st < pend - 1e-6:
+                if midi <= pmidi:
+                    continue                       # a lower note under a sounding higher one
+                out[-1] = (pst, max(0.05, st - pst), pmidi, pvel)   # the higher note takes over
+        out.append((st, dur, midi, vel))
+    return out
+
+
+def _estimate_chart(pm, t0: float, beat_s: float, beats: int, n_bars: int, chord_insts: list,
+                    bass_insts: list) -> list[list[str]]:
     """Chord per half-bar (3 + 2 in five, 2 + 2 in four) by template match over pitch-class
     time within the window, with the bass root weighted; vocabulary is the tune's own chords."""
     from collections import Counter
 
-    insts = [i for i in pm.instruments if i.name in tracks and not i.is_drum]
-    bass = [i for i in pm.instruments if i.name == bass_track]
+    insts = [i for i in chord_insts if not i.is_drum]
+    bass = list(bass_insts)
+    bass_ids = {id(i) for i in bass}
     roots = {name: pcs[0] for name, pcs in CHORD_VOCAB.items()}
 
     def window(a: float, b: float) -> str:
@@ -314,7 +370,7 @@ def _estimate_chart(pm, t0: float, beat_s: float, beats: int, n_bars: int, track
         for inst in insts:
             for n in inst.notes:
                 if n.start < b and n.end > a:
-                    w[n.pitch % 12] += (min(n.end, b) - max(n.start, a)) * (2.0 if inst.name == bass_track else 1.0)
+                    w[n.pitch % 12] += (min(n.end, b) - max(n.start, a)) * (2.0 if id(inst) in bass_ids else 1.0)
         if not w:
             return ""
         bass_pcs: Counter = Counter(n.pitch % 12 for i in bass for n in i.notes if n.start < b and n.end > a)
