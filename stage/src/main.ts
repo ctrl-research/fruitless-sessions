@@ -12,7 +12,7 @@ import { rigFor } from './body/rig'
 import { drumKit, piano, saxophone, upright } from './body/instruments'
 
 const params = new URLSearchParams(location.search)
-const takeName = params.get('take') ?? 'smoke'
+const takeName = params.get('take') ?? 'take-five'
 const base = `${import.meta.env.BASE_URL}takes/${takeName}`
 
 interface TakeIndexEntry { name: string; path: string; duration_s: number; roles: string[]; audio: boolean }
@@ -79,6 +79,7 @@ async function main() {
     motor: { names: string[]; steps: number; data: Float32Array } | null
     notes: NoteEvent[]
     kitHits: Record<string, THREE.Object3D> | null
+    kitBase: Map<THREE.Object3D, number>
   }
   const performers: Performer[] = []
   const proto = new BrainPoints(take.somaXyz, take.superclass, take.manifest.shared.superclass_legend)
@@ -181,12 +182,14 @@ async function main() {
     const body = new FlyBody(bodyScale)
     performer.add(body.group)
     let kitHits: Record<string, THREE.Object3D> | null = null
+    const kitBase = new Map<THREE.Object3D, number>()
     if (f.entry.role === 'sax') {
       const horn = saxophone(bodyScale); horn.position.set(0, 0, bodyScale * 0.55); performer.add(horn)
     } else if (f.entry.role === 'bass') {
       const b = upright(bodyScale); b.position.set(bodyScale * 0.6, 0, bodyScale * 0.4); performer.add(b)
     } else if (f.entry.role === 'drums') {
       const kit = drumKit(bodyScale); kit.group.position.set(0, 0, bodyScale * 0.9); performer.add(kit.group); kitHits = kit.hits
+      for (const o of Object.values(kit.hits)) kitBase.set(o, o.position.y)
     } else if (f.entry.role === 'piano') {
       const pf = piano(bodyScale); pf.position.set(0, 0, bodyScale * 0.35); performer.add(pf)
     }
@@ -198,7 +201,7 @@ async function main() {
     performers.push({
       entry: f.entry, layers: f.layers, points, meshes, body, rig: rigFor(f.entry.role), pose: idlePose(), group,
       heroIds, heroPos, groups, rate: new Float32Array(groups.length), smooth: new Float32Array(groups.length),
-      lastBin: -1, lastHeroBin: -1, motor: null, notes: [], kitHits,
+      lastBin: -1, lastHeroBin: -1, motor: null, notes: [], kitHits, kitBase,
     })
   }
   // brain activity toggle
@@ -326,10 +329,16 @@ async function main() {
   }
 
   // ---------------------------------------------------------------- loop
+  let lastT = -1
   function frame(now: number) {
     const dt = transport.tick(now)
     if (clock.audio && clock.active && transport.playing) transport.sync(clock.time())
     const tNow = transport.time
+    // the scene moves only when time moves: playing, or a scrub while paused. Paused and
+    // still, every pose, glow and cymbal holds exactly where it was.
+    const moved = transport.playing || tNow !== lastT
+    lastT = tNow
+    const dtAnim = moved ? dt : 0
     const si = soloistIndex(tNow)
     if (si !== focus) { focus = si; showPanels(performers[focus]) }
     const step = tuneInfo ? Math.max(0, Math.floor(tNow / tuneInfo.step_s)) : 0
@@ -383,18 +392,24 @@ async function main() {
       pf.groups.forEach(([g], gi) => { rates[g] = pf.smooth[gi] })
       const sounding = pf.notes.filter(n => n.t <= tNow && tNow < n.t + n.dur)
       const noteAge = sounding.length ? tNow - Math.max(...sounding.map(n => n.t)) : 0
-      pf.pose = pf.rig.pose({ readout: readoutNow, rates, noteOn: sounding.length > 0, noteAge, t: tNow }, pf.pose, dt)
-      pf.body.apply(pf.pose, transport.playing ? dt : 0)
-      if (pf.kitHits) {
-        // nudge the drum that was just hit
-        for (const n of sounding) {
-          const name = n.midi === 36 ? 'kick' : n.midi === 38 ? 'snare' : n.midi === 42 ? 'hat' : n.midi === 51 ? 'ride' : n.midi === 45 ? 'tom_lo' : n.midi === 47 ? 'tom_hi' : 'crash'
-          const o = pf.kitHits[name]
-          if (o) o.position.y += 0.02 * bodyScale * Math.exp(-(tNow - n.t) * 15) * Math.sin(tNow * 90)
-        }
+      if (moved) {
+        pf.pose = pf.rig.pose({ readout: readoutNow, rates, noteOn: sounding.length > 0, noteAge, t: tNow }, pf.pose, dt)
+        pf.body.apply(pf.pose, dtAnim)
       }
-      pf.points.update(dt)
-      pf.meshes.update(dt)
+      if (pf.kitHits && moved) {
+        // each piece sits at its base height plus a decaying wobble from the hits sounding now;
+        // set, not accumulated, so nothing drifts
+        const wobble = new Map<THREE.Object3D, number>()
+        for (const n of sounding) {
+          const name = [35, 36].includes(n.midi) ? 'kick' : [37, 38, 40].includes(n.midi) ? 'snare' : [42, 44, 46].includes(n.midi) ? 'hat'
+            : [51, 53, 59].includes(n.midi) ? 'ride' : [41, 43, 45].includes(n.midi) ? 'tom_lo' : [47, 48, 50].includes(n.midi) ? 'tom_hi' : 'crash'
+          const o = pf.kitHits[name]
+          if (o) wobble.set(o, (wobble.get(o) ?? 0) + 0.02 * bodyScale * Math.exp(-(tNow - n.t) * 15) * Math.sin(tNow * 90))
+        }
+        for (const [o, base] of pf.kitBase) o.position.y = base + (wobble.get(o) ?? 0)
+      }
+      pf.points.update(dtAnim)
+      pf.meshes.update(dtAnim)
     }
 
     if (score) {
