@@ -1,0 +1,155 @@
+{
+ "lod": 3,
+ "voxel_nm": 8.0,
+ "format": "fsm2",
+ "decimate": 0.35,
+ "neurons": {
+  "0": {
+   "bodyId": 10001,
+   "vertices": 17650,
+   "triangles": 35285,
+   "file": "../meshes/0.fsm",
+   "bytes": 317650
+  },
+  "6": {
+   "bodyId": 10010,
+   "vertices": 16408,
+   "triangles": 34055,
+   "file": "../meshes/6.fsm",
+   "bytes": 302818
+  },
+  "306": {
+   "bodyId": 10331,
+   "vertices": 8422,
+   "triangles": 17381,
+   "file": "../meshes/306.fsm",
+   "bytes": 154858
+  },
+  "6367": {
+   "bodyId": 16949,
+   "vertices": 2798,
+   "triangles": 5813,
+   "file": "../meshes/6367.fsm",
+   "bytes": 51706
+  },
+  "53985": {
+   "bodyId": 72059,
+   "vertices": 524,
+   "triangles": 999,
+   "file": "../meshes/53985.fsm",
+   "bytes": 9178
+  },
+  "69922": {
+   "bodyId": 92440,
+   "vertices": 524,
+   "triangles": 1000,
+   "file": "../meshes/69922.fsm",
+   "bytes": 9184
+  },
+  "76346": {
+   "bodyId": 101087,
+   "vertices": 544,
+   "triangles": 1000,
+   "file": "../meshes/76346.fsm",
+   "bytes": 9304
+  },
+  "89918": {
+   "bodyId": 120303,
+   "vertices": 505,
+   "triangles": 1000,
+   "file": "../meshes/89918.fsm",
+   "bytes": 9070
+  },
+  "101707": {
+   "bodyId": 140015,
+   "vertices": 1095,
+   "triangles": 1991,
+   "file": "../meshes/101707.fsm",
+   "bytes": 18556
+  },
+  "103096": {
+   "bodyId": 142827,
+   "vertices": 936,
+   "triangles": 1625,
+   "file": "../meshes/103096.fsm",
+   "bytes": 15406
+  },
+  "111142": {
+   "bodyId": 163597,
+   "vertices": 973,
+   "triangles": 1651,
+   "file": "../meshes/111142.fsm",
+   "bytes": 15784
+  },
+  "115789": {
+   "bodyId": 183084,
+   "vertices": 1025,
+   "triangles": 1617,
+   "file": "../meshes/115789.fsm",
+   "bytes": 15892
+  },
+  "116661": {
+   "bodyId": 187492,
+   "vertices": 807,
+   "triangles": 1404,
+   "file": "../meshes/116661.fsm",
+   "bytes": 13306
+  },
+  "119373": {
+   "bodyId": 202888,
+   "vertices": 515,
+   "triangles": 998,
+   "file": "../meshes/119373.fsm",
+   "bytes": 9118
+  },
+  "120209": {
+   "bodyId": 209155,
+   "vertices": 1044,
+   "triangles": 1690,
+   "file": "../meshes/120209.fsm",
+   "bytes": 16444
+  },
+  "121038": {
+   "bodyId": 215556,
+   "vertices": 547,
+   "triangles": 1029,
+   "file": "../meshes/121038.fsm",
+   "bytes": 9496
+  },
+  "128247": {
+   "bodyId": 516217,
+   "vertices": 530,
+   "triangles": 1000,
+   "file": "../meshes/128247.fsm",
+   "bytes": 9220
+  },
+  "142715": {
+   "bodyId": 557646,
+   "vertices": 1059,
+   "triangles": 1934,
+   "file": "../meshes/142715.fsm",
+   "bytes": 17998
+  },
+  "164783": {
+   "bodyId": 942168,
+   "vertices": 842,
+   "triangles": 1297,
+   "file": "../meshes/164783.fsm",
+   "bytes": 12874
+  },
+  "164995": {
+   "bodyId": 957530,
+   "vertices": 454,
+   "triangles": 850,
+   "file": "../meshes/164995.fsm",
+   "bytes": 7864
+  },
+  "165245": {
+   "bodyId": 213650853,
+   "vertices": 931,
+   "triangles": 1456,
+   "file": "../meshes/165245.fsm",
+   "bytes": 14362
+  }
+ }
+}

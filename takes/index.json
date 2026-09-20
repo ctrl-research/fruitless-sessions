@@ -1,0 +1,64 @@
+[
+  {
+    "name": "blues-in-f",
+    "path": "blues-in-f",
+    "duration_s": 72.0,
+    "roles": [
+      "sax",
+      "bass",
+      "drums",
+      "piano"
+    ],
+    "tune": "blues-in-f",
+    "audio": true
+  },
+  {
+    "name": "fly-me-to-the-moon",
+    "path": "fly-me-to-the-moon",
+    "duration_s": 151.03408000000002,
+    "roles": [
+      "sax",
+      "bass",
+      "drums",
+      "piano"
+    ],
+    "tune": "fly-me-to-the-moon",
+    "audio": true
+  },
+  {
+    "name": "fruitless-session-1",
+    "path": "fruitless-session-1",
+    "duration_s": 43.63636363636363,
+    "roles": [
+      "sax",
+      "bass",
+      "drums",
+      "piano"
+    ],
+    "tune": "fruitless-session-1",
+    "audio": true
+  },
+  {
+    "name": "smoke",
+    "path": "smoke",
+    "duration_s": 1.0,
+    "roles": [
+      "smoke"
+    ],
+    "tune": null,
+    "audio": false
+  },
+  {
+    "name": "take-five",
+    "path": "take-five",
+    "duration_s": 205.6127,
+    "roles": [
+      "sax",
+      "bass",
+      "drums",
+      "piano"
+    ],
+    "tune": "take-five",
+    "audio": true
+  }
+]

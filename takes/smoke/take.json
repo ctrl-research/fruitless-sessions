@@ -1,0 +1,208 @@
+{
+  "format": "fruitless-take/1",
+  "name": "smoke",
+  "duration_s": 1.0,
+  "seed": 0,
+  "flies": [
+    {
+      "role": "smoke",
+      "layers": {
+        "soma": {
+          "path": "smoke/soma",
+          "format": "fsa1",
+          "bin_ms": 50,
+          "chunk_s": 10.0,
+          "n_bins": 20,
+          "n_chunks": 1,
+          "n_neurons": 166700,
+          "space": "pack",
+          "ticks": 10000,
+          "dt_ms": 0.1
+        },
+        "hero": {
+          "path": "smoke/hero",
+          "format": "fsa1",
+          "bin_ms": 10,
+          "chunk_s": 10.0,
+          "n_bins": 100,
+          "n_chunks": 1,
+          "n_neurons": 21,
+          "space": "subset",
+          "ticks": 10000,
+          "dt_ms": 0.1,
+          "subset": "subset.npy"
+        }
+      },
+      "circuit": {
+        "sweet_grn": [
+          53985,
+          69922,
+          76346,
+          89918,
+          101707,
+          103096,
+          111142,
+          115789,
+          116661,
+          119373,
+          120209,
+          121038,
+          128247,
+          142715,
+          164783,
+          164995,
+          165245
+        ],
+        "MN9_L": [
+          306
+        ],
+        "MN9_R": [
+          6367
+        ],
+        "DNp01": [
+          0,
+          6
+        ]
+      }
+    }
+  ],
+  "shared": {
+    "soma_xyz": "../shared/soma-xyz.bin",
+    "superclass": "../shared/superclass.bin",
+    "superclass_legend": [
+      "ENS",
+      "ascending_neuron",
+      "cb_efferent",
+      "cb_endocrine",
+      "cb_intrinsic",
+      "cb_motor",
+      "cb_sensory",
+      "cb_sensory_tbc",
+      "descending_neuron",
+      "descending_neuron_tbc",
+      "efferent_ascending",
+      "efferent_descending",
+      "ol_intrinsic",
+      "ol_sensory",
+      "sensory_ascending",
+      "sensory_ascending_tbc",
+      "sensory_descending",
+      "visual_centrifugal",
+      "visual_projection",
+      "visual_projection_tbc",
+      "vnc_efferent",
+      "vnc_endocrine",
+      "vnc_intrinsic",
+      "vnc_motor",
+      "vnc_sensory",
+      "vnc_sensory_tbc",
+      "vnc_tbc"
+    ],
+    "n_neurons": 166700,
+    "with_soma": 139662,
+    "voxel_nm": 8
+  },
+  "audio": null,
+  "provenance": {
+    "fruitless": "0.1.0",
+    "pack_dataset": "male-cns-v1.0-superclass-non-null-known-nt",
+    "pack_arrays_sha256": {
+      "neuron_ids": "5b4663b251d250331fa28aa1fb7b736accf12258b701f5e06f7dc455c7d3a907",
+      "row_ptr": "650a711cf170d6b9e4e820fb7f4b63d077c0b2134740971c2e0d1617c2536b3c",
+      "destinations": "25a8cf3e8b2f0ce8f244c90754bdc47a6cf148c512fbc19fc030a0f920a0e626",
+      "signed_counts": "d9690eec194cec48ec4a822ae131a0a2c3f43d6eb42af396e672a099ea9d5c70"
+    },
+    "sources": {
+      "annotations": {
+        "name": "body-annotations-male-cns-v1.0-minconf-0.5.feather",
+        "sha256": "2177e246113e4cfbf1e7772ec37c6da1955ff22e8063d0b1f833101f99a9a3b2"
+      },
+      "neurotransmitters": {
+        "name": "body-neurotransmitters-male-cns-v1.0.feather",
+        "sha256": "95c9289220663abeb3409f3ad9e5a7f8a53f8093f5139d15502cd08da8879621"
+      },
+      "connectivity": {
+        "name": "connectome-weights-male-cns-v1.0-minconf-0.5.feather",
+        "sha256": "e35da783d1c686b2b58b3b87cd6a403ae43bfcfba8bff28e08ef752c1a56afc1"
+      }
+    },
+    "engine": "runtime multiplies accumulated int32 counts by w_syn = 0.275 mV; never accumulate in float"
+  },
+  "smoke": {
+    "seconds_bio": 1.0,
+    "seconds_wall": 0.86,
+    "wall_per_bio_second": 0.858,
+    "total_spikes": 35150,
+    "neurons_fired": 1919,
+    "sweet_grn_hz": 102.41,
+    "MN9_L_hz": 60.0,
+    "MN9_R_hz": 0.0,
+    "DNp01_hz": 0.0,
+    "soma_layer": {
+      "format": "fsa1",
+      "bin_ms": 50,
+      "chunk_s": 10.0,
+      "n_bins": 20,
+      "n_chunks": 1,
+      "n_neurons": 166700,
+      "space": "pack",
+      "ticks": 10000,
+      "dt_ms": 0.1
+    },
+    "hero_layer": {
+      "format": "fsa1",
+      "bin_ms": 10,
+      "chunk_s": 10.0,
+      "n_bins": 100,
+      "n_chunks": 1,
+      "n_neurons": 21,
+      "space": "subset",
+      "ticks": 10000,
+      "dt_ms": 0.1,
+      "subset": "subset.npy"
+    },
+    "pack_dataset": "male-cns-v1.0-superclass-non-null-known-nt",
+    "seed": 0,
+    "circuit": {
+      "sweet_grn": [
+        53985,
+        69922,
+        76346,
+        89918,
+        101707,
+        103096,
+        111142,
+        115789,
+        116661,
+        119373,
+        120209,
+        121038,
+        128247,
+        142715,
+        164783,
+        164995,
+        165245
+      ],
+      "MN9_L": [
+        306
+      ],
+      "MN9_R": [
+        6367
+      ],
+      "DNp01": [
+        0,
+        6
+      ]
+    },
+    "iterations": 3
+  },
+  "iterations": 3,
+  "meshes": {
+    "index": "meshes.json",
+    "lod": 3,
+    "decimate": 0.35,
+    "n": 21,
+    "vertices": 58133,
+    "bytes": 1040088
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "format": "fsa1",
+  "bin_ms": 10,
+  "chunk_s": 10.0,
+  "n_bins": 20557,
+  "n_chunks": 21,
+  "n_neurons": 1116,
+  "space": "subset",
+  "ticks": 2055700,
+  "dt_ms": 0.1,
+  "subset": "subset.npy"
+}

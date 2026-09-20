@@ -1,0 +1,11 @@
+{
+  "format": "fsa1",
+  "bin_ms": 50,
+  "chunk_s": 10.0,
+  "n_bins": 20,
+  "n_chunks": 1,
+  "n_neurons": 166700,
+  "space": "pack",
+  "ticks": 10000,
+  "dt_ms": 0.1
+}
