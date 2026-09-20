@@ -54,7 +54,7 @@ async function main() {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false })
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
   const scene = new THREE.Scene()
-  scene.background = new THREE.Color(0x07070b)
+  scene.background = new THREE.Color(0x1c070a)   // deep maroon behind and above the curtains
   scene.add(new THREE.AmbientLight(0xffffff, 0.35))
   const key = new THREE.DirectionalLight(0xffffff, 1.2)
   key.position.set(1, 1, 1)
@@ -119,6 +119,14 @@ async function main() {
   )
   platform.position.y = -R * 0.35 - bodyScale * 0.175
   scene.add(platform)
+  // the house floor: dark brown boards out to the horizon, under the platform
+  const floor = new THREE.Mesh(
+    new THREE.CircleGeometry(platformR * 12, 96),
+    new THREE.MeshStandardMaterial({ color: 0x2a1a10, roughness: 0.95, metalness: 0.0 }),
+  )
+  floor.rotation.x = -Math.PI / 2
+  floor.position.y = -R * 0.35 - bodyScale * 0.35
+  scene.add(floor)
   // red velvet behind the band, lit softly so it reads as cloth rather than a black void
   const drapes = curtains(platformR * 1.9, R * 2.4)
   drapes.position.set(0, -R * 0.35, -platformR * 0.35)
