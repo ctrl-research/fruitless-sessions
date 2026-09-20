@@ -10,7 +10,7 @@ import { Score, type TuneInfo, type NoteEvent } from './score'
 import { FlyBody, idlePose } from './body/fly'
 import { rigFor } from './body/rig'
 import { drumKit, piano, saxophone, upright } from './body/instruments'
-import { audience, curtains, walnutMaterial } from './scenery'
+import { audience, bobAudience, curtains, walnutMaterial } from './scenery'
 
 const params = new URLSearchParams(location.search)
 const takeName = params.get('take') ?? 'fly-me-to-the-moon'
@@ -457,6 +457,8 @@ async function main() {
       pf.meshes.update(dtAnim)
     }
 
+    // the crowd bobs on the beat while the music moves; a hop is a few percent of a body
+    if (moved && tuneInfo) bobAudience(crowd, tNow / (60 / tuneInfo.tempo_bpm))
     if (score) {
       score.drawStrip(strip, tNow)
       const sec = score.sectionAt(tNow)

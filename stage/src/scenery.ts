@@ -141,6 +141,7 @@ export function audience(
   const rows = Math.max(1, Math.round(Math.sqrt(count / 2.2)))
   const perRow = Math.ceil(count / rows)
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), v = new THREE.Vector3(), sc = new THREE.Vector3()
+  const rest: { pos: THREE.Vector3; quat: THREE.Quaternion; scale: number; phase: number; every: number; amp: number }[] = []
   let i = 0
   for (let r = 0; r < rows && i < count; r++) {
     const z = area.zNear + (area.zFar - area.zNear) * (r + 0.5) / rows
@@ -152,10 +153,12 @@ export function audience(
       sc.set(k, k, k)
       m4.compose(v, q, sc)
       mesh.setMatrixAt(i, m4)
+      rest.push({ pos: v.clone(), quat: q.clone(), scale: k, phase: rnd(), every: rnd() < 0.5 ? 1 : 2, amp: 0.04 + rnd() * 0.06 })
       // nearer rows darker, with a spread of greys within each row
       const depth = (r + 0.5) / rows
-      // shades of grey in sRGB from #262626 up to a cap of #808080, nearer rows darker
-      const grey = Math.min(0.5, 0.15 + 0.3 * depth + (rnd() - 0.5) * 0.12)
+      // shades of grey in sRGB up to a cap of #808080: the front row, nearest the lit stage, is
+      // brightest and the rows fall off toward the back of the house
+      const grey = Math.min(0.5, 0.5 - 0.4 * depth + (rnd() - 0.5) * 0.08)
       mesh.setColorAt(i, new THREE.Color().setRGB(grey, grey, grey, THREE.SRGBColorSpace))
       i++
     }
@@ -163,5 +166,28 @@ export function audience(
   mesh.count = i
   mesh.instanceMatrix.needsUpdate = true
   if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+  mesh.userData.rest = rest
+  mesh.userData.unit = scale
   return mesh
+}
+
+/** Bob the crowd: each fly hops a few percent of a body on its own beats (every beat or every
+ *  other), a sharp little jump rather than a sway. Call with the current time in beats. */
+export function bobAudience(mesh: THREE.InstancedMesh, beats: number): void {
+  const rest = mesh.userData.rest as { pos: THREE.Vector3; quat: THREE.Quaternion; scale: number; phase: number; every: number; amp: number }[] | undefined
+  if (!rest) return
+  const unit = mesh.userData.unit as number
+  const m4 = new THREE.Matrix4(), v = new THREE.Vector3(), sc = new THREE.Vector3()
+  for (let i = 0; i < rest.length; i++) {
+    const r = rest[i]
+    const b = beats + r.phase
+    const hopBeat = Math.floor(b)
+    const frac = b - hopBeat
+    const hop = hopBeat % r.every === 0 && frac < 0.35 ? Math.sin((frac / 0.35) * Math.PI) : 0
+    v.copy(r.pos); v.y += hop * r.amp * unit
+    sc.setScalar(r.scale)
+    m4.compose(v, r.quat, sc)
+    mesh.setMatrixAt(i, m4)
+  }
+  mesh.instanceMatrix.needsUpdate = true
 }
