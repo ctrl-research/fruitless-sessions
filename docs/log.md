@@ -452,3 +452,9 @@ hl) and side; about 60 to 68 neurons each. Wing MNs are the 56 wing types.
   both drum tracks map directly. Trombones, baritone, flute, muted trumpet and
   the brass pad are not played. The chart estimate reads as the tune in C.
 - This is the default take on the site.
+- Set dressing (2026-09-20): walnut stage and pleated red velvet curtains as
+  procedural canvas textures, a dark brown house floor and maroon backdrop,
+  the whole stage on a riser about a piano high, and an audience of 42 fruit
+  fly silhouettes in front: one body baked into a single geometry and drawn
+  as an InstancedMesh with per-instance greys capped at #808080, standing
+  upright with wings hanging behind, facing the stage. No brains, no motion.

@@ -107,3 +107,61 @@ export function curtains(radius: number, height: number): THREE.Group {
   g.add(valance)
   return g
 }
+
+/** An audience of fruit fly silhouettes: one FlyBody baked into a single geometry and drawn as
+ *  an InstancedMesh, dark and unlit, facing the stage. No brains, no motion. */
+export function audience(
+  bodyFactory: () => THREE.Object3D, count: number, area: { xHalf: number; zNear: number; zFar: number },
+  scale: number, floorY: number, seed = 3,
+): THREE.InstancedMesh {
+  const template = bodyFactory()
+  template.updateMatrixWorld(true)
+  const parts: THREE.BufferGeometry[] = []
+  template.traverse(o => {
+    const m = o as THREE.Mesh
+    if (!m.isMesh || !m.geometry) return
+    const g = (m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone())
+    for (const name of Object.keys(g.attributes)) if (name !== 'position') g.deleteAttribute(name)
+    g.applyMatrix4(m.matrixWorld)
+    parts.push(g)
+  })
+  // merge by hand: positions only
+  let total = 0
+  for (const g of parts) total += g.attributes.position.count
+  const pos = new Float32Array(total * 3)
+  let off = 0
+  for (const g of parts) { pos.set(g.attributes.position.array as Float32Array, off); off += g.attributes.position.array.length }
+  const merged = new THREE.BufferGeometry()
+  merged.setAttribute('position', new THREE.BufferAttribute(pos, 3))
+  // per-instance greys so the crowd has some texture; the material's colour is the multiplier
+  const mat = new THREE.MeshBasicMaterial({ color: 0xffffff })
+  const mesh = new THREE.InstancedMesh(merged, mat, count)
+  let s = seed
+  const rnd = () => { s = (s * 1664525 + 1013904223) % 4294967296; return s / 4294967296 }
+  const rows = Math.max(1, Math.round(Math.sqrt(count / 2.2)))
+  const perRow = Math.ceil(count / rows)
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), v = new THREE.Vector3(), sc = new THREE.Vector3()
+  let i = 0
+  for (let r = 0; r < rows && i < count; r++) {
+    const z = area.zNear + (area.zFar - area.zNear) * (r + 0.5) / rows
+    for (let c = 0; c < perRow && i < count; c++) {
+      const x = -area.xHalf + (2 * area.xHalf) * (c + 0.5 + (r % 2) * 0.5) / (perRow + 0.5) + (rnd() - 0.5) * area.xHalf * 0.12
+      const k = scale * (0.85 + rnd() * 0.3)
+      v.set(x, floorY, z + (rnd() - 0.5) * (area.zFar - area.zNear) * 0.15)
+      q.setFromEuler(new THREE.Euler(0, Math.PI + (rnd() - 0.5) * 0.5, 0))   // facing the stage
+      sc.set(k, k, k)
+      m4.compose(v, q, sc)
+      mesh.setMatrixAt(i, m4)
+      // nearer rows darker, with a spread of greys within each row
+      const depth = (r + 0.5) / rows
+      // shades of grey in sRGB from #262626 up to a cap of #808080, nearer rows darker
+      const grey = Math.min(0.5, 0.15 + 0.3 * depth + (rnd() - 0.5) * 0.12)
+      mesh.setColorAt(i, new THREE.Color().setRGB(grey, grey, grey, THREE.SRGBColorSpace))
+      i++
+    }
+  }
+  mesh.count = i
+  mesh.instanceMatrix.needsUpdate = true
+  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+  return mesh
+}
