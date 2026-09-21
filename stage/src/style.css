@@ -56,4 +56,6 @@ main { position: relative; min-height: 0; }
 .ctl { display: flex; gap: 6px; align-items: center; cursor: pointer; }
 .ctl select { background: #16161e; color: var(--fg); border: 1px solid #2a2a36; border-radius: 4px; height: 26px; max-width: 34ch; }
 .ctl input { accent-color: var(--accent); }
-body.no-stats .readout, body.no-stats .motor, body.no-stats .rig, body.no-stats .meta, body.no-stats .now { display: none !important; }
+body.no-stats .readout, body.no-stats .motor, body.no-stats .rig, body.no-stats .meta, body.no-stats .now, body.no-stats .perf { display: none !important; }
+.perf { position: absolute; right: 12px; bottom: 12px; color: var(--dim); font-size: 11px; font-variant-numeric: tabular-nums;
+  background: rgba(10,10,16,0.6); padding: 3px 8px; border-radius: 4px; max-width: 60ch; text-align: right; }

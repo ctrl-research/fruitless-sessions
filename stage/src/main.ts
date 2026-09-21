@@ -352,7 +352,22 @@ async function main() {
   const clock = new AudioClock(transport, audioSrc)
   clock.onBlocked = why => { status.textContent = `audio blocked by the browser (${why.split(':')[0]}); running silent on the frame clock` }
   transport.showVolume(clock.audio !== null)
-  ;(window as unknown as { __fs: unknown }).__fs = { transport, clock, take, performers, camera, controls }
+  ;(window as unknown as { __fs: unknown }).__fs = { transport, clock, take, performers, camera, controls, renderer }
+
+  // the stats panel's performance line: what this machine is drawing and how fast, so a slow
+  // report can say which GPU and how many triangles rather than just "laggy"
+  const perfEl = document.getElementById('perf')!
+  const gl = renderer.getContext()
+  const dbg = gl.getExtension('WEBGL_debug_renderer_info')
+  const gpuName = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)) : 'GPU unknown'
+  let lastPerf = 0
+  function showPerf(now: number, frameS: number, scale: number) {
+    if (now - lastPerf < 500) return
+    lastPerf = now
+    const r = renderer.info.render
+    const fmt = (n: number) => n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(0)}k` : String(n)
+    perfEl.textContent = `${(1 / frameS).toFixed(0)} fps · ${Math.round(scale * 100)}% · ${gpuName} · ${r.calls} calls · ${fmt(r.triangles)} tris · ${fmt(r.points)} pts`
+  }
 
   // score: tune, notes per role, motor readouts
   const tuneInfo = (take.manifest as unknown as { tune?: TuneInfo }).tune ?? null
@@ -407,6 +422,7 @@ async function main() {
   let meshesShed = false
   function govern(now: number, dt: number) {
     frameEma += (Math.min(dt, 0.1) - frameEma) * 0.05
+    showPerf(now, frameEma, pixelScale)
     if (!transport.playing || now - lastGovern < 1500) return
     if (frameEma > 1 / 30 && pixelScale > 0.5) {
       pixelScale = Math.max(0.5, pixelScale - 0.15)
