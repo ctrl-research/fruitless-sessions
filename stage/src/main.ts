@@ -51,11 +51,37 @@ async function main() {
 
   // ---------------------------------------------------------------- scene
   const canvas = document.getElementById('stage') as HTMLCanvasElement
+  // a throwaway context reads the GPU's name before the real renderer is made. Integrated and
+  // software GPUs start in light mode (no antialiasing, 1x resolution, hero meshes off) instead
+  // of being handed eight million transparent triangles and dropping the context. Light mode
+  // also sticks after a dropped context (see below); the header toggle brings the meshes back.
+  const probe = document.createElement('canvas').getContext('webgl2')
+  const probeDbg = probe?.getExtension('WEBGL_debug_renderer_info')
+  const gpuName = probe && probeDbg ? String(probe.getParameter(probeDbg.UNMASKED_RENDERER_WEBGL)) : 'GPU unknown'
+  probe?.getExtension('WEBGL_lose_context')?.loseContext()
+  const weakGpu = /SwiftShader|Basic Render|llvmpipe|Intel\(R\) (HD|UHD|Iris)|Intel.*Graphics|Radeon\(TM\) Graphics|Radeon Vega/i.test(gpuName)
+  let lite = weakGpu
+  try { const v = localStorage.getItem('fs.lite'); if (v !== null) lite = v === '1' } catch { /* private mode */ }
   // high-performance: on dual-GPU Windows laptops Chrome otherwise picks the integrated GPU
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' })
-  const maxPixelRatio = Math.min(devicePixelRatio, 2)
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: !lite, alpha: false, powerPreference: 'high-performance' })
+  const maxPixelRatio = lite ? 1 : Math.min(devicePixelRatio, 2)
   let pixelScale = 1            // adaptive: steps down while frames run long, back up when they are quick
   renderer.setPixelRatio(maxPixelRatio)
+  // a dropped context leaves the canvas black while the page runs on. Windows drops it when a
+  // frame outlasts the driver's 2 s GPU timeout or memory runs out. Reload once in light mode;
+  // if it drops again, say so and stop.
+  canvas.addEventListener('webglcontextlost', () => {
+    let again = false
+    try {
+      again = sessionStorage.getItem('fs.ctxlost') === '1'
+      sessionStorage.setItem('fs.ctxlost', '1')
+      localStorage.setItem('fs.lite', '1')
+      localStorage.setItem('fs.meshes', '0')
+    } catch { /* ignore */ }
+    if (again) { status.textContent = 'the GPU dropped the WebGL context again; untick brain activity or use a smaller window'; return }
+    status.textContent = 'the GPU dropped the WebGL context (too much to draw); reloading in light mode…'
+    setTimeout(() => location.reload(), 1500)
+  })
   const scene = new THREE.Scene()
   scene.background = new THREE.Color(0x1c070a)   // deep maroon behind and above the curtains
   scene.add(new THREE.AmbientLight(0xffffff, 0.35))
@@ -258,7 +284,8 @@ async function main() {
   // (millions of triangles), so a slow machine can keep the dots and drop the meshes
   const brainToggle = document.getElementById('toggle-brain') as HTMLInputElement
   const meshToggle = document.getElementById('toggle-meshes') as HTMLInputElement
-  try { meshToggle.checked = localStorage.getItem('fs.meshes') !== '0' } catch { /* private mode */ }
+  try { const v = localStorage.getItem('fs.meshes'); meshToggle.checked = v === null ? !lite : v !== '0' } catch { meshToggle.checked = !lite }
+  if (lite && !meshToggle.checked) status.textContent = `light mode for ${gpuName.replace(/^ANGLE \((.*)\)$/, '$1').split(',').slice(0, 2).join(',')}: hero meshes off, 1× resolution; the header toggle brings the meshes back`
   const applyBrain = () => {
     for (const pf of performers) {
       pf.points.object.visible = brainToggle.checked
@@ -357,16 +384,13 @@ async function main() {
   // the stats panel's performance line: what this machine is drawing and how fast, so a slow
   // report can say which GPU and how many triangles rather than just "laggy"
   const perfEl = document.getElementById('perf')!
-  const gl = renderer.getContext()
-  const dbg = gl.getExtension('WEBGL_debug_renderer_info')
-  const gpuName = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)) : 'GPU unknown'
   let lastPerf = 0
   function showPerf(now: number, frameS: number, scale: number) {
     if (now - lastPerf < 500) return
     lastPerf = now
     const r = renderer.info.render
     const fmt = (n: number) => n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(0)}k` : String(n)
-    perfEl.textContent = `${(1 / frameS).toFixed(0)} fps · ${Math.round(scale * 100)}% · ${gpuName} · ${r.calls} calls · ${fmt(r.triangles)} tris · ${fmt(r.points)} pts`
+    perfEl.textContent = `${(1 / frameS).toFixed(0)} fps · ${Math.round(scale * 100)}%${lite ? ' · light' : ''} · ${gpuName} · ${r.calls} calls · ${fmt(r.triangles)} tris`
   }
 
   // score: tune, notes per role, motor readouts
