@@ -53,14 +53,17 @@ cd stage && npm install && npm run dev                 # http://localhost:5173/?
 
 ## Publishing
 
-The simulation needs Apple silicon, so the site is built here and pushed:
+Code and data travel separately. Merging to `main` builds the stage in CI
+(`.github/workflows/pages.yml`) and deploys it to
+https://fruitless-sessions.j6n.dev/ together with the takes on the data-only
+`gh-pages` branch. The simulation needs Apple silicon, so the takes are
+pushed from here whenever they change:
 
 ```bash
-scripts/publish                  # builds stage/dist with every bundled take, force-pushes gh-pages
+scripts/publish                  # force-pushes stage/public/takes to gh-pages, which redeploys
 ```
 
-`.github/workflows/pages.yml` deploys whatever is on `gh-pages` to
-https://fruitless-sessions.j6n.dev/. Soma
+Soma
 positions, superclass codes and hero meshes live once under
 `stage/public/takes/shared` and `stage/public/takes/meshes`; each take adds
 only its activity layers and audio (a four-fly 72 s blues is about 60 MB, the
