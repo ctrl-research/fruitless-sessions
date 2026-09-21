@@ -1,9 +1,16 @@
-# Deploys the pre-built `gh-pages` branch. The build itself happens locally (scripts/publish)
-# because the simulation needs Apple silicon; this workflow only serves what was pushed.
+# Builds the stage from `main` and deploys it together with the takes on `gh-pages`.
+#
+# Code and data travel separately. A merge to main builds the page here and redeploys it.
+# The takes (~100 MB each, gitignored) are simulated on Apple silicon and pushed to the
+# data-only `gh-pages` branch by scripts/publish; a push there redeploys too. Either way the
+# site is main's build plus gh-pages' takes.
 name: Pages
 on:
   push:
-    branches: [gh-pages]
+    # a push-triggered workflow runs from the file on the pushed branch, so scripts/publish
+    # copies this file onto gh-pages with the takes
+    branches: [main, gh-pages]
+  workflow_dispatch:
 permissions:
   contents: read
   pages: write
@@ -18,12 +25,34 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out the stage (always main, whichever branch triggered this)
+        uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Check out the takes
+        uses: actions/checkout@v4
         with:
           ref: gh-pages
+          path: .takes
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .tool-versions
+          cache: npm
+          cache-dependency-path: stage/package-lock.json
+      - name: Build the stage
+        working-directory: stage
+        run: |
+          npm ci
+          npm run build
+      - name: Add the takes to the build
+        run: |
+          [ -f .takes/takes/index.json ] || { echo "gh-pages has no takes/index.json: run scripts/publish" >&2; exit 1; }
+          cp -R .takes/takes stage/dist/takes
+          touch stage/dist/.nojekyll
+          du -sh stage/dist
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: stage/dist
       - id: deployment
         uses: actions/deploy-pages@v4

@@ -24,3 +24,19 @@ jobs:
           if git grep -l "PRIVATE_KEY\|AWS_SECRET" --cached -- ':!*.md' 2>/dev/null; then
             echo "Error: sensitive strings committed"; exit 1
           fi
+
+  stage:
+    # the Pages workflow builds this on merge, so a type error here must fail the PR, not the deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .tool-versions
+          cache: npm
+          cache-dependency-path: stage/package-lock.json
+      - name: Typecheck and build the stage
+        working-directory: stage
+        run: |
+          npm ci
+          npm run build
