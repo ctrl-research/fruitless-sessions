@@ -12,12 +12,10 @@ const SUPERCLASS_HUE: Record<string, number> = {
 export class BrainPoints {
   readonly object: THREE.Points
   readonly n: number
-  private base: Float32Array      // resting color per neuron (rgb)
-  private color: Float32Array     // live color attribute
-  private heat: Float32Array      // 0..1 activity, decays each frame
+  private heat: Float32Array      // 0..1 activity per neuron, decays each frame; the shader lerps colour from it
   private active = new Set<number>()   // neurons with heat > 0, so update() is O(active) not O(N)
   private hasSoma: Uint8Array
-  private colorAttr: THREE.BufferAttribute
+  private heatAttr: THREE.BufferAttribute
   readonly center = new THREE.Vector3()
   readonly radius: number
 
@@ -43,22 +41,23 @@ export class BrainPoints {
     bb.getCenter(this.center)
     this.radius = bb.getSize(new THREE.Vector3()).length() / 2
 
-    this.base = new Float32Array(this.n * 3)
+    const base = new Float32Array(this.n * 3)   // resting color per neuron, static on the GPU
     const c = new THREE.Color()
     for (let i = 0; i < this.n; i++) {
       const name = superclass[i] === 255 ? '' : legend[superclass[i]]
       const hue = SUPERCLASS_HUE[name] ?? 0.0
       c.setHSL(hue, 0.4, 0.075)   // resting tint; with normal blending this is as bright as rest ever gets
-      this.base[3 * i] = c.r; this.base[3 * i + 1] = c.g; this.base[3 * i + 2] = c.b
+      base[3 * i] = c.r; base[3 * i + 1] = c.g; base[3 * i + 2] = c.b
     }
-    this.color = new Float32Array(this.base)
     this.heat = new Float32Array(this.n)
 
     const geom = new THREE.BufferGeometry()
     geom.setAttribute('position', new THREE.BufferAttribute(pos, 3))
-    this.colorAttr = new THREE.BufferAttribute(this.color, 3)
-    this.colorAttr.setUsage(THREE.DynamicDrawUsage)
-    geom.setAttribute('color', this.colorAttr)
+    geom.setAttribute('color', new THREE.BufferAttribute(base, 3))
+    // only the one-float heat attribute changes per frame: a quarter of the upload of a live rgb buffer
+    this.heatAttr = new THREE.BufferAttribute(this.heat, 1)
+    this.heatAttr.setUsage(THREE.DynamicDrawUsage)
+    geom.setAttribute('heat', this.heatAttr)
     geom.boundingSphere = new THREE.Sphere(this.center.clone(), this.radius)
 
     const mat = new THREE.PointsMaterial({
@@ -67,6 +66,16 @@ export class BrainPoints {
       size: 0.4, vertexColors: true, sizeAttenuation: true, transparent: true, opacity: 0.4,
       depthWrite: false, blending: THREE.NormalBlending,
     })
+    // lerp from the resting tint toward a hot amber-white by heat, on the GPU
+    mat.customProgramCacheKey = () => 'brain-points'
+    mat.onBeforeCompile = shader => {
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nattribute float heat;\nvarying float vHeat;')
+        .replace('#include <color_vertex>', '#include <color_vertex>\nvHeat = heat;')
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', '#include <common>\nvarying float vHeat;')
+        .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(1.0, 0.7, 0.25), vHeat);')
+    }
     this.object = new THREE.Points(geom, mat)
   }
 
@@ -84,24 +93,19 @@ export class BrainPoints {
   update(dtS: number, decayPerSecond = 3): void {
     if (this.active.size === 0) return
     const d = Math.exp(-decayPerSecond * dtS)
-    const b = this.base, c = this.color, h = this.heat
+    const h = this.heat
     for (const i of this.active) {
       const v = h[i] * d
       const t = v < 0.002 ? 0 : v
       h[i] = t
-      // lerp from base toward a hot amber-white
-      c[3 * i] = b[3 * i] + (1.0 - b[3 * i]) * t
-      c[3 * i + 1] = b[3 * i + 1] + (0.7 - b[3 * i + 1]) * t
-      c[3 * i + 2] = b[3 * i + 2] + (0.25 - b[3 * i + 2]) * t
       if (t === 0) this.active.delete(i)
     }
-    this.colorAttr.needsUpdate = true
+    this.heatAttr.needsUpdate = true
   }
 
   clearHeat(): void {
-    for (const i of this.active) { this.color[3 * i] = this.base[3 * i]; this.color[3 * i + 1] = this.base[3 * i + 1]; this.color[3 * i + 2] = this.base[3 * i + 2] }
     this.heat.fill(0)
     this.active.clear()
-    this.colorAttr.needsUpdate = true
+    this.heatAttr.needsUpdate = true
   }
 }

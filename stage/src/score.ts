@@ -58,13 +58,30 @@ export class Score {
     return ns.filter(n => n.t <= t && t < n.t + n.dur)
   }
 
-  /** Draw the form across the top and one lane of notes per band member below it. */
+  private bg: HTMLCanvasElement | null = null
+  private bgKey = ''
+
+  /** Draw the form across the top and one lane of notes per band member below it, then the
+   *  playhead. Everything but the playhead is static, so it is painted once per canvas size
+   *  into an offscreen canvas and blitted; per frame this is one drawImage and one fillRect. */
   drawStrip(canvas: HTMLCanvasElement, t: number): void {
-    const ctx = canvas.getContext('2d')!
     const dpr = devicePixelRatio
-    const w = canvas.width = canvas.clientWidth * dpr
-    const h = canvas.height = canvas.clientHeight * dpr
-    ctx.clearRect(0, 0, w, h)
+    const w = Math.round(canvas.clientWidth * dpr), h = Math.round(canvas.clientHeight * dpr)
+    if (w === 0 || h === 0) return
+    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h }
+    const key = `${w}x${h}`
+    if (!this.bg || this.bgKey !== key) { this.bg = this.paintBackground(w, h, dpr); this.bgKey = key }
+    const ctx = canvas.getContext('2d')!
+    ctx.drawImage(this.bg, 0, 0)
+    const x = (w * t) / this.tune.duration_s
+    ctx.fillStyle = '#e8e6e1'
+    ctx.fillRect(x - dpr, 0, 2 * dpr, h)
+  }
+
+  private paintBackground(w: number, h: number, dpr: number): HTMLCanvasElement {
+    const canvas = document.createElement('canvas')
+    canvas.width = w; canvas.height = h
+    const ctx = canvas.getContext('2d')!
     const dur = this.tune.duration_s
     const x = (s: number) => (s / dur) * w
     const headerH = 16 * dpr
@@ -110,8 +127,6 @@ export class Score {
       }
       ctx.globalAlpha = 1
     })
-    // playhead
-    ctx.fillStyle = '#e8e6e1'
-    ctx.fillRect(x(t) - dpr, 0, 2 * dpr, h)
+    return canvas
   }
 }

@@ -51,8 +51,11 @@ async function main() {
 
   // ---------------------------------------------------------------- scene
   const canvas = document.getElementById('stage') as HTMLCanvasElement
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false })
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
+  // high-performance: on dual-GPU Windows laptops Chrome otherwise picks the integrated GPU
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' })
+  const maxPixelRatio = Math.min(devicePixelRatio, 2)
+  let pixelScale = 1            // adaptive: steps down while frames run long, back up when they are quick
+  renderer.setPixelRatio(maxPixelRatio)
   const scene = new THREE.Scene()
   scene.background = new THREE.Color(0x1c070a)   // deep maroon behind and above the curtains
   scene.add(new THREE.AmbientLight(0xffffff, 0.35))
@@ -73,6 +76,8 @@ async function main() {
     heroIds: Int32Array | null
     heroPos: Map<number, number>
     groups: [string, number[]][]
+    localGroups: number[][]        // hero-layer local index -> indices into groups
+    sounding: NoteEvent[]
     rate: Float32Array
     smooth: Float32Array
     lastBin: number
@@ -187,7 +192,6 @@ async function main() {
   lamp.position.set(0, ceilingY + bodyScale * 0.4, 0)
   stageGroup.add(lamp)
 
-  const brainGroups: THREE.Object3D[] = []
   for (let fi = 0; fi < flies.length; fi++) {
     const f = flies[fi]
     const seat = seats.get(f.entry.role) ?? new THREE.Vector3()
@@ -216,7 +220,6 @@ async function main() {
     meshes.group.position.copy(points.object.position)
     tilt.add(points.object, meshes.group)
     group.add(holder)
-    brainGroups.push(points.object, meshes.group)
     const stand = new THREE.Group()
     stand.position.set(0, -R * 0.35, 0)
     const performer = new THREE.Group()
@@ -243,20 +246,39 @@ async function main() {
     const heroPos = new Map<number, number>()
     heroIds?.forEach((packIdx, k) => heroPos.set(packIdx, k))
     const groups = Object.entries(f.entry.circuit)
+    const localGroups: number[][] = heroIds ? Array.from({ length: heroIds.length }, () => []) : []
+    groups.forEach(([, idx], gi) => { for (const packIdx of idx) { const k = heroPos.get(packIdx); if (k !== undefined) localGroups[k].push(gi) } })
     performers.push({
       entry: f.entry, layers: f.layers, points, meshes, body, rig: rigFor(f.entry.role), pose: idlePose(), group,
-      heroIds, heroPos, groups, rate: new Float32Array(groups.length), smooth: new Float32Array(groups.length),
+      heroIds, heroPos, groups, localGroups, sounding: [], rate: new Float32Array(groups.length), smooth: new Float32Array(groups.length),
       lastBin: -1, lastHeroBin: -1, motor: null, notes: [], kitHits, kitBase,
     })
   }
-  // brain activity toggle
+  // brain activity toggle, and the hero meshes on their own: they are the heaviest thing drawn
+  // (millions of triangles), so a slow machine can keep the dots and drop the meshes
   const brainToggle = document.getElementById('toggle-brain') as HTMLInputElement
-  const applyBrain = () => brainGroups.forEach(o => { o.visible = brainToggle.checked })
+  const meshToggle = document.getElementById('toggle-meshes') as HTMLInputElement
+  try { meshToggle.checked = localStorage.getItem('fs.meshes') !== '0' } catch { /* private mode */ }
+  const applyBrain = () => {
+    for (const pf of performers) {
+      pf.points.object.visible = brainToggle.checked
+      pf.meshes.group.visible = brainToggle.checked && meshToggle.checked
+    }
+    meshToggle.disabled = !brainToggle.checked
+  }
   brainToggle.onchange = applyBrain
+  meshToggle.onchange = () => {
+    try { localStorage.setItem('fs.meshes', meshToggle.checked ? '1' : '0') } catch { /* ignore */ }
+    applyBrain()
+    if (meshToggle.checked) loadMeshes()
+  }
   applyBrain()
 
-  // hero meshes for every performer, behind the transport
-  if (meshInfo) {
+  // hero meshes for every performer, behind the transport; not downloaded at all while they are off
+  let meshesRequested = false
+  function loadMeshes() {
+    if (!meshInfo || meshesRequested) return
+    meshesRequested = true
     status.textContent = 'loading hero meshes…'
     fetch(`${base}/${meshInfo.index}`).then(r => r.json()).then(async (index: MeshIndex) => {
       for (const pf of performers) {
@@ -271,6 +293,7 @@ async function main() {
       document.getElementById('meta')!.textContent += ` · ${performers.reduce((n, pf) => n + pf.meshes.count, 0)} hero meshes (lod ${index.lod})`
     }).catch(err => { status.textContent = `meshes: ${err}`; console.error(err) })
   }
+  if (meshToggle.checked) loadMeshes()
 
   const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 5000)
   const controls = new OrbitControls(camera, canvas)
@@ -328,6 +351,7 @@ async function main() {
   const audioSrc = take.manifest.audio ? `${base}/${take.manifest.audio}` : null
   const clock = new AudioClock(transport, audioSrc)
   clock.onBlocked = why => { status.textContent = `audio blocked by the browser (${why.split(':')[0]}); running silent on the frame clock` }
+  transport.showVolume(clock.audio !== null)
   ;(window as unknown as { __fs: unknown }).__fs = { transport, clock, take, performers, camera, controls }
 
   // score: tune, notes per role, motor readouts
@@ -375,8 +399,35 @@ async function main() {
 
   // ---------------------------------------------------------------- loop
   let lastT = -1
+  // frame-time governor: a smoothed wall dt, checked every 1.5 s while playing. Long frames step
+  // the render resolution down (to half); quick ones step it back up. If the floor is reached and
+  // frames are still long, the hero meshes are hidden once, and the header toggle brings them back.
+  let frameEma = 1 / 60
+  let lastGovern = 0
+  let meshesShed = false
+  function govern(now: number, dt: number) {
+    frameEma += (Math.min(dt, 0.1) - frameEma) * 0.05
+    if (!transport.playing || now - lastGovern < 1500) return
+    if (frameEma > 1 / 30 && pixelScale > 0.5) {
+      pixelScale = Math.max(0.5, pixelScale - 0.15)
+      renderer.setPixelRatio(maxPixelRatio * pixelScale)
+      lastGovern = now
+    } else if (frameEma > 1 / 24 && pixelScale <= 0.5 && !meshesShed && meshToggle.checked) {
+      meshesShed = true
+      meshToggle.checked = false
+      applyBrain()
+      status.textContent = 'hero meshes hidden to keep up with the music; re-enable them in the header'
+      lastGovern = now
+    } else if (frameEma < 1 / 55 && pixelScale < 1) {
+      pixelScale = Math.min(1, pixelScale + 0.1)
+      renderer.setPixelRatio(maxPixelRatio * pixelScale)
+      lastGovern = now
+    }
+  }
+  let lastNow = ''
   function frame(now: number) {
     const dt = transport.tick(now)
+    govern(now, dt)
     if (clock.audio && clock.active && transport.playing) transport.sync(clock.time())
     const tNow = transport.time
     // the scene moves only when time moves: playing, or a scrub while paused. Paused and
@@ -408,15 +459,11 @@ async function main() {
             if (!ev) continue
             pf.meshes.addBin(ev.neuron, ev.count, pf.heroIds)
             pf.rate.fill(0)
-            pf.groups.forEach(([, idx], gi) => {
-              let s = 0
-              for (const packIdx of idx) {
-                const k = pf.heroPos.get(packIdx)
-                if (k === undefined) continue
-                for (let e = 0; e < ev.neuron.length; e++) if (ev.neuron[e] === k) s += ev.count[e]
-              }
-              pf.rate[gi] = (s / Math.max(1, idx.length)) * (1000 / hero.meta.bin_ms)
-            })
+            for (let e = 0; e < ev.neuron.length; e++) {
+              const gs = pf.localGroups[ev.neuron[e]]
+              if (gs) for (const gi of gs) pf.rate[gi] += ev.count[e]
+            }
+            pf.groups.forEach(([, idx], gi) => { pf.rate[gi] = (pf.rate[gi] / Math.max(1, idx.length)) * (1000 / hero.meta.bin_ms) })
             for (let gi = 0; gi < pf.groups.length; gi++) pf.smooth[gi] += (pf.rate[gi] - pf.smooth[gi]) * 0.1
           }
           pf.lastHeroBin = hb
@@ -435,7 +482,7 @@ async function main() {
       }
       const rates: Record<string, number> = {}
       pf.groups.forEach(([g], gi) => { rates[g] = pf.smooth[gi] })
-      const sounding = pf.notes.filter(n => n.t <= tNow && tNow < n.t + n.dur)
+      const sounding = pf.sounding = pf.notes.filter(n => n.t <= tNow && tNow < n.t + n.dur)
       const noteAge = sounding.length ? tNow - Math.max(...sounding.map(n => n.t)) : 0
       if (moved) {
         pf.pose = pf.rig.pose({ readout: readoutNow, rates, noteOn: sounding.length > 0, noteAge, t: tNow }, pf.pose, dt)
@@ -462,11 +509,12 @@ async function main() {
     if (score) {
       score.drawStrip(strip, tNow)
       const sec = score.sectionAt(tNow)
-      const sounding = performers.flatMap(pf => pf.notes.filter(n => n.t <= tNow && tNow < n.t + n.dur).map(n => `${pf.entry.role[0]}:${noteName(n.midi)}`))
+      const sounding = performers.flatMap(pf => pf.sounding.map(n => `${pf.entry.role[0]}:${noteName(n.midi)}`))
       const freeKeys = (take.manifest as unknown as { free_keys?: (string | null)[] }).free_keys
       const chordLabel = score.chordAt(tNow) || (freeKeys ? (freeKeys[score.barAt(tNow)] ?? 'finding the key…') + ' (from the ring)' : '–')
-      nowEl.textContent = `bar ${score.barAt(tNow) + 1}${tuneInfo?.meter && tuneInfo.meter !== '4/4' ? ' (' + tuneInfo.meter + ')' : ''} · ${chordLabel} · ${sec ? sec.kind + (sec.who.length && sec.kind !== 'free' ? ' ' + sec.who.join('/') : '') : ''}` +
+      const caption = `bar ${score.barAt(tNow) + 1}${tuneInfo?.meter && tuneInfo.meter !== '4/4' ? ' (' + tuneInfo.meter + ')' : ''} · ${chordLabel} · ${sec ? sec.kind + (sec.who.length && sec.kind !== 'free' ? ' ' + sec.who.join('/') : '') : ''}` +
         (sounding.length ? ` · ♪ ${sounding.slice(0, 6).join(' ')}` : '')
+      if (caption !== lastNow) { nowEl.textContent = caption; lastNow = caption }   // no layout work while nothing changed
     }
     // camera pans (not pivots) toward the soloist until the user takes over
     const pfx = performers[focus].group.position.x

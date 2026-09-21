@@ -30,6 +30,9 @@ export class AudioClock {
       a.addEventListener('waiting', () => { this.active = false })
       transport.onSeekAudio = (t) => { a.currentTime = t }
       transport.onSpeed = (s) => { a.playbackRate = s }
+      const applyVolume = () => { a.volume = transport.volume; a.muted = transport.muted }
+      transport.onVolume = applyVolume
+      applyVolume()
       a.addEventListener('ended', () => transport.pause())
     }
   }
