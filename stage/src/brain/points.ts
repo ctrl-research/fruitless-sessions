@@ -1,4 +1,9 @@
-/** Whole-brain soma points, colored by binned activity with a short decay. */
+/** Whole-brain soma points, colored by binned activity with a short decay.
+ *
+ *  Drawn as one instanced quad per soma rather than gl.POINTS: Chrome on Windows runs WebGL on
+ *  Direct3D, which has no point sprites, so ANGLE expands every point in a geometry shader and
+ *  a 140k-point cloud crawls. Quads take the ordinary vertex path everywhere. The quad is sized
+ *  in pixels exactly as PointsMaterial's sizeAttenuation would size a point. */
 
 import * as THREE from 'three'
 
@@ -9,83 +14,108 @@ const SUPERCLASS_HUE: Record<string, number> = {
   vnc_intrinsic: 0.45, vnc_sensory: 0.40, vnc_motor: 0.06, vnc_efferent: 0.09, vnc_endocrine: 0.85,
 }
 
+const VERT = /* glsl */`
+  uniform float size;      // world units, as PointsMaterial.size
+  uniform float scale;     // half the logical viewport height, as PointsMaterial's scale uniform
+  uniform vec2 viewport;   // drawing buffer size in pixels
+  attribute vec2 corner;
+  attribute vec3 offset;
+  attribute vec3 tint;
+  attribute float heat;
+  varying vec3 vColor;
+  void main() {
+    vColor = mix(tint, vec3(1.0, 0.7, 0.25), heat);   // resting tint toward a hot amber-white
+    vec4 mvPosition = modelViewMatrix * vec4(offset, 1.0);
+    vec4 clip = projectionMatrix * mvPosition;
+    float px = size * (scale / -mvPosition.z);        // the point's size in pixels
+    clip.xy += corner * px / viewport * clip.w;        // a px-wide square around it, screen aligned
+    gl_Position = clip;
+  }
+`
+const FRAG = /* glsl */`
+  uniform float opacity;
+  varying vec3 vColor;
+  void main() {
+    gl_FragColor = vec4(vColor, opacity);
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
+  }
+`
+
 export class BrainPoints {
-  readonly object: THREE.Points
+  readonly object: THREE.Mesh
   readonly n: number
-  private heat: Float32Array      // 0..1 activity per neuron, decays each frame; the shader lerps colour from it
-  private active = new Set<number>()   // neurons with heat > 0, so update() is O(active) not O(N)
-  private hasSoma: Uint8Array
-  private heatAttr: THREE.BufferAttribute
+  private heat: Float32Array           // 0..1 activity per instance, decays each frame
+  private instOf: Int32Array           // pack index -> instance, or -1 for a neuron with no soma
+  private active = new Set<number>()   // instances with heat > 0, so update() is O(active) not O(N)
+  private heatAttr: THREE.InstancedBufferAttribute
   readonly center = new THREE.Vector3()
   readonly radius: number
 
   constructor(xyz: Float32Array, superclass: Uint8Array, legend: string[], scale = 0.001) {
     this.n = superclass.length
-    const pos = new Float32Array(this.n * 3)
-    this.hasSoma = new Uint8Array(this.n)
+    this.instOf = new Int32Array(this.n).fill(-1)
+    let m = 0
+    for (let i = 0; i < this.n; i++) if (Number.isFinite(xyz[3 * i])) this.instOf[i] = m++
+    const pos = new Float32Array(m * 3)
+    const base = new Float32Array(m * 3)   // resting color per soma, static on the GPU
     const bb = new THREE.Box3()
+    const c = new THREE.Color()
+    const v = new THREE.Vector3()
     for (let i = 0; i < this.n; i++) {
-      const x = xyz[3 * i], y = xyz[3 * i + 1], z = xyz[3 * i + 2]
-      if (Number.isFinite(x)) {
-        this.hasSoma[i] = 1
-        // MaleCNS voxels are 8 nm. z runs along the body axis; put it vertical so the
-        // brain sits above the ventral nerve cord, x stays left/right, y becomes depth.
-        pos[3 * i] = x * scale
-        pos[3 * i + 1] = -z * scale
-        pos[3 * i + 2] = y * scale
-        bb.expandByPoint(new THREE.Vector3(pos[3 * i], pos[3 * i + 1], pos[3 * i + 2]))
-      } else {
-        pos[3 * i] = pos[3 * i + 1] = pos[3 * i + 2] = 1e9   // parked far away, effectively hidden
-      }
+      const k = this.instOf[i]
+      if (k < 0) continue
+      // MaleCNS voxels are 8 nm. z runs along the body axis; put it vertical so the
+      // brain sits above the ventral nerve cord, x stays left/right, y becomes depth.
+      pos[3 * k] = xyz[3 * i] * scale
+      pos[3 * k + 1] = -xyz[3 * i + 2] * scale
+      pos[3 * k + 2] = xyz[3 * i + 1] * scale
+      bb.expandByPoint(v.set(pos[3 * k], pos[3 * k + 1], pos[3 * k + 2]))
+      const name = superclass[i] === 255 ? '' : legend[superclass[i]]
+      c.setHSL(SUPERCLASS_HUE[name] ?? 0.0, 0.4, 0.075)   // resting tint; with normal blending this is as bright as rest ever gets
+      base[3 * k] = c.r; base[3 * k + 1] = c.g; base[3 * k + 2] = c.b
     }
     bb.getCenter(this.center)
     this.radius = bb.getSize(new THREE.Vector3()).length() / 2
+    this.heat = new Float32Array(m)
 
-    const base = new Float32Array(this.n * 3)   // resting color per neuron, static on the GPU
-    const c = new THREE.Color()
-    for (let i = 0; i < this.n; i++) {
-      const name = superclass[i] === 255 ? '' : legend[superclass[i]]
-      const hue = SUPERCLASS_HUE[name] ?? 0.0
-      c.setHSL(hue, 0.4, 0.075)   // resting tint; with normal blending this is as bright as rest ever gets
-      base[3 * i] = c.r; base[3 * i + 1] = c.g; base[3 * i + 2] = c.b
-    }
-    this.heat = new Float32Array(this.n)
-
-    const geom = new THREE.BufferGeometry()
-    geom.setAttribute('position', new THREE.BufferAttribute(pos, 3))
-    geom.setAttribute('color', new THREE.BufferAttribute(base, 3))
-    // only the one-float heat attribute changes per frame: a quarter of the upload of a live rgb buffer
-    this.heatAttr = new THREE.BufferAttribute(this.heat, 1)
+    const geom = new THREE.InstancedBufferGeometry()
+    geom.setAttribute('corner', new THREE.BufferAttribute(new Float32Array([-1, -1, 1, -1, 1, 1, -1, 1]), 2))
+    geom.setIndex([0, 1, 2, 0, 2, 3])
+    geom.setAttribute('offset', new THREE.InstancedBufferAttribute(pos, 3))
+    geom.setAttribute('tint', new THREE.InstancedBufferAttribute(base, 3))
+    // only the one-float heat attribute changes per frame
+    this.heatAttr = new THREE.InstancedBufferAttribute(this.heat, 1)
     this.heatAttr.setUsage(THREE.DynamicDrawUsage)
     geom.setAttribute('heat', this.heatAttr)
+    geom.instanceCount = m
     geom.boundingSphere = new THREE.Sphere(this.center.clone(), this.radius)
 
-    const mat = new THREE.PointsMaterial({
+    const uniforms = { size: { value: 0.4 }, scale: { value: 1 }, viewport: { value: new THREE.Vector2(1, 1) }, opacity: { value: 0.4 } }
+    const mat = new THREE.ShaderMaterial({
+      uniforms, vertexShader: VERT, fragmentShader: FRAG,
       // normal blending: overlapping resting dots no longer add up to white in the dense optic
       // lobes, so the haze stays a haze and a spiking dot is the brightest thing in the brain
-      size: 0.4, vertexColors: true, sizeAttenuation: true, transparent: true, opacity: 0.4,
-      depthWrite: false, blending: THREE.NormalBlending,
+      transparent: true, depthWrite: false, blending: THREE.NormalBlending,
     })
-    // lerp from the resting tint toward a hot amber-white by heat, on the GPU
-    mat.customProgramCacheKey = () => 'brain-points'
-    mat.onBeforeCompile = shader => {
-      shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nattribute float heat;\nvarying float vHeat;')
-        .replace('#include <color_vertex>', '#include <color_vertex>\nvHeat = heat;')
-      shader.fragmentShader = shader.fragmentShader
-        .replace('#include <common>', '#include <common>\nvarying float vHeat;')
-        .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(1.0, 0.7, 0.25), vHeat);')
+    this.object = new THREE.Mesh(geom, mat)
+    const size = new THREE.Vector2()
+    this.object.onBeforeRender = renderer => {
+      renderer.getSize(size)
+      uniforms.scale.value = size.y * 0.5
+      renderer.getDrawingBufferSize(uniforms.viewport.value)
     }
-    this.object = new THREE.Points(geom, mat)
   }
 
   /** Add this bin's spikes as heat; call once per new bin. */
   addBin(neuron: Uint32Array, count: Uint8Array, gain = 1.0): void {
-    for (let k = 0; k < neuron.length; k++) {
-      const i = neuron[k]
+    for (let e = 0; e < neuron.length; e++) {
+      const i = neuron[e]
       if (i >= this.n) continue
-      this.heat[i] = Math.min(1, this.heat[i] + gain * count[k])
-      this.active.add(i)
+      const k = this.instOf[i]
+      if (k < 0) continue
+      this.heat[k] = Math.min(1, this.heat[k] + gain * count[e])
+      this.active.add(k)
     }
   }
 
@@ -94,11 +124,11 @@ export class BrainPoints {
     if (this.active.size === 0) return
     const d = Math.exp(-decayPerSecond * dtS)
     const h = this.heat
-    for (const i of this.active) {
-      const v = h[i] * d
+    for (const k of this.active) {
+      const v = h[k] * d
       const t = v < 0.002 ? 0 : v
-      h[i] = t
-      if (t === 0) this.active.delete(i)
+      h[k] = t
+      if (t === 0) this.active.delete(k)
     }
     this.heatAttr.needsUpdate = true
   }
